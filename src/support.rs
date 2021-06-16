@@ -6,6 +6,8 @@ use simple_sds::serialize::Serialize;
 use simple_sds::sparse_vector::SparseVector;
 use simple_sds::bits;
 
+use std::cmp::Ordering;
+use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
 use std::str::Utf8Error;
@@ -218,15 +220,9 @@ impl<T: AsRef<str>> From<&[T]> for StringArray {
         result
     }
 }
-
 impl<T: AsRef<str>> From<Vec<T>> for StringArray {
     fn from(v: Vec<T>) -> Self {
-        let total_len = v.iter().fold(0, |sum, item| sum + item.as_ref().len());
-        let mut result = StringArray::with_capacity(v.len(), total_len);
-        for string in v.iter() {
-            result.append(string.as_ref());
-        }
-        result
+        StringArray::from(v.as_slice())
     }
 }
 
@@ -294,6 +290,168 @@ impl<'a> FusedIterator for StringIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME Dictionary, Tags, ByteCode, Run
+// FIXME tests
+/// An immutable set of immutable strings with integer identifiers.
+///
+/// The strings are stored in a [`StringArray`] and the identifiers are indexes into the array.
+///
+/// A `Dictionary` can be built from a [`StringArray`] or a [`Vec`] or a slice of any type that can be converted to a string slice.
+/// The construction will fail if the source contains duplicate strings.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::support::Dictionary;
+/// use std::convert::TryFrom;
+///
+/// let source = vec!["first", "second", "third", "fourth"];
+/// let dict = Dictionary::try_from(source.as_slice()).unwrap();
+/// for (index, value) in source.iter().enumerate() {
+///     assert_eq!(dict.id(value), Some(index));
+/// }
+/// assert_eq!(dict.id("fifth"), None);
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Dictionary {
+    strings: StringArray,
+    sorted_ids: IntVector,
+}
+
+impl Dictionary {
+    /// Returns the number of strings in the dictionary.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.strings.len()
+    }
+
+    /// Returns `true` if the dictionary is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the identifier of the given string in the dictionary, or [`None`] if there is no such string.
+    pub fn id<T: AsRef<[u8]>>(&self, string: T) -> Option<usize> {
+        let mut low = 0;
+        let mut high = self.len();
+        while low < high {
+            let mid = low + (high - low) / 2;
+            let id = self.sorted_ids.get(mid) as usize;
+            match string.as_ref().cmp(self.bytes(id)) {
+                Ordering::Less => high = mid,
+                Ordering::Equal => return Some(id),
+                Ordering::Greater => low = mid + 1,
+            }
+        }
+        None
+    }
+
+    /// Returns a byte slice corresponding to the string with identifier `i`.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `i >= self.len()`.
+    pub fn bytes(&self, i: usize) -> &[u8] {
+        self.strings.bytes(i)
+    }
+
+    /// Returns a string slice corresponding to the string with identifier `i` or an error if the bytes are not valid UTF-8.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `i >= self.len()`.
+    pub fn str(&self, i: usize) -> Result<&str, Utf8Error> {
+        self.strings.str(i)
+    }
+
+    /// Returns a copy of the string with identifier `i` or an error if the bytes are not valid UTF-8.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `i >= self.len()`.
+    pub fn string(&self, i: usize) -> Result<String, Utf8Error> {
+        self.strings.string(i)
+    }
+}
+
+impl Serialize for Dictionary {
+    fn serialize_header<T: io::Write>(&self, _: &mut T) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn serialize_body<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
+        self.strings.serialize(writer)?;
+        self.sorted_ids.serialize(writer)?;
+        Ok(())
+    }
+
+    fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
+        let strings = StringArray::load(reader)?;
+        let sorted_ids = IntVector::load(reader)?;
+        Ok(Dictionary {
+            strings: strings,
+            sorted_ids: sorted_ids,
+        })
+    }
+
+    fn size_in_elements(&self) -> usize {
+        self.strings.size_in_elements() + self.sorted_ids.size_in_elements()
+    }
+}
+
+impl TryFrom<StringArray> for Dictionary {
+    type Error = &'static str;
+
+    fn try_from(source: StringArray) -> Result<Self, Self::Error> {
+        // Sort the ids and check for duplicates.
+        let mut sorted: Vec<usize> = Vec::with_capacity(source.len());
+        for i in 0..source.len() {
+            sorted.push(i);
+        }
+        sorted.sort_unstable_by(|a, b| source.bytes(*a).cmp(source.bytes(*b)));
+        for i in 1..sorted.len() {
+            if source.bytes(sorted[i - 1]) == source.bytes(sorted[i]) {
+                return Err("Cannot build a dictionary from a source with duplicate strings");
+            }
+        }
+
+        // Compact the sorted ids.
+        let width = if sorted.is_empty() { 1 } else { bits::bit_len(sorted.len() as u64 - 1) };
+        let mut sorted_ids = IntVector::with_capacity(sorted.len(), width).unwrap();
+        sorted_ids.extend(sorted);
+
+        Ok(Dictionary {
+            strings: source,
+            sorted_ids: sorted_ids,
+        })
+    }
+}
+
+impl<T: AsRef<str>> TryFrom<&[T]> for Dictionary {
+    type Error = &'static str;
+
+    fn try_from(source: &[T]) -> Result<Self, Self::Error> {
+        Self::try_from(StringArray::from(source))
+    }
+}
+
+impl<T: AsRef<str>> TryFrom<Vec<T>> for Dictionary {
+    type Error = &'static str;
+
+    fn try_from(source: Vec<T>) -> Result<Self, Self::Error> {
+        Self::try_from(StringArray::from(source))
+    }
+}
+
+impl AsRef<StringArray> for Dictionary {
+    #[inline]
+    fn as_ref(&self) -> &StringArray {
+        &(self.strings)
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+// FIXME Tags, ByteCode, Run
 
 //-----------------------------------------------------------------------------
