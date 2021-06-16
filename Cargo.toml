@@ -1,0 +1,12 @@
+[package]
+name = "gbwt"
+version = "0.1.0"
+authors = ["Jouni Siren <jouni.siren@iki.fi>"]
+edition = "2018"
+description = "Partial reimplementation of the GBWT."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/jltsiren/gbwt-rs"
+
+[dependencies]
+simple-sds = { git = "https://github.com/jltsiren/simple-sds", branch = "main" }
