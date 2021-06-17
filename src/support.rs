@@ -7,6 +7,8 @@ use simple_sds::sparse_vector::SparseVector;
 use simple_sds::bits;
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::collections::btree_map::Iter as TagIter;
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
@@ -127,8 +129,8 @@ impl StringArray {
         self.index.push(self.strings.len() as u64);
     }
 
-    // Returns (bytes to packed, packed to bytes).
-    fn alphabet(data: &[u8]) -> (Vec<usize>, Vec<u8>) {
+    // Returns (bytes to packed, packed to bytes, packed character width).
+    fn alphabet(data: &[u8]) -> (Vec<usize>, Vec<u8>, usize) {
         // Determine the byte values that are present.
         let mut bytes_to_packed: Vec<usize> = vec![0; 1 << 8];
         for byte in data {
@@ -136,7 +138,8 @@ impl StringArray {
         }
 
         // Determine alphabet size.
-        let sigma = cmp::max(bytes_to_packed.iter().sum(), 1);
+        let sigma = bytes_to_packed.iter().sum();
+        let width = cmp::max(sigma, 1);
 
         // Build the alphabet mappings.
         let mut packed_to_bytes: Vec<u8> = vec![0; sigma];
@@ -149,7 +152,7 @@ impl StringArray {
             }
         }
 
-        (bytes_to_packed, packed_to_bytes)
+        (bytes_to_packed, packed_to_bytes, width)
     }
 }
 
@@ -165,11 +168,11 @@ impl Serialize for StringArray {
         drop(sv);
 
         // Determine and serialize the alphabet
-        let (pack, alphabet) = Self::alphabet(&self.strings);
+        let (pack, alphabet, width) = Self::alphabet(&self.strings);
         alphabet.serialize(writer)?;
 
         // Pack and serialize the strings.
-        let mut packed = IntVector::new(bits::bit_len((alphabet.len() - 1) as u64)).unwrap();
+        let mut packed = IntVector::new(width).unwrap();
         packed.extend(self.strings.iter().map(|x| pack[*x as usize]));
         packed.serialize(writer)?;
 
@@ -204,9 +207,9 @@ impl Serialize for StringArray {
 
     fn size_in_elements(&self) -> usize {
         let sv = SparseVector::try_from_iter(self.index.iter().take(self.len()).map(|x| x as usize)).unwrap();
-        let (_, alphabet) = Self::alphabet(&self.strings);
+        let (_, alphabet, width) = Self::alphabet(&self.strings);
 
-        sv.size_in_elements() + alphabet.size_in_elements() + IntVector::size_by_params(self.strings.len(), bits::bit_len(self.strings.len() as u64))
+        sv.size_in_elements() + alphabet.size_in_elements() + IntVector::size_by_params(self.strings.len(), width)
     }
 }
 
@@ -290,7 +293,6 @@ impl<'a> FusedIterator for StringIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// An immutable set of immutable strings with integer identifiers.
 ///
 /// The strings are stored in a [`StringArray`] and the identifiers are indexes into the array.
@@ -308,6 +310,7 @@ impl<'a> FusedIterator for StringIter<'a> {}
 /// let dict = Dictionary::try_from(source.as_slice()).unwrap();
 /// for (index, value) in source.iter().enumerate() {
 ///     assert_eq!(dict.id(value), Some(index));
+///     assert_eq!(dict.bytes(index), source[index].as_bytes());
 /// }
 /// assert_eq!(dict.id("fifth"), None);
 /// ```
@@ -452,6 +455,126 @@ impl AsRef<StringArray> for Dictionary {
 
 //-----------------------------------------------------------------------------
 
-// FIXME Tags, ByteCode, Run
+/// A key-value structure with strings as both keys and values.
+///
+/// The keys are case insensitive.
+/// This structure is a simple wrapper over [`BTreeMap`]`<`[`String`]`, `[`String`]`>` that converts all keys to lower case.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::support::Tags;
+///
+/// let mut tags = Tags::new();
+/// tags.insert("first-key", "first-value");
+/// tags.insert("second-key", "second-value");
+/// assert!(tags.contains_key("First-Key"));
+/// assert_eq!(*tags.get("second-key").unwrap(), "second-value");
+/// ```
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Tags {
+    tags: BTreeMap<String, String>,
+}
+
+impl Tags {
+    /// Creates an empty `Tags` structure.
+    pub fn new() -> Tags {
+        Tags::default()
+    }
+
+    /// Returns the number of tags.
+    pub fn len(&self) -> usize {
+        self.tags.len()
+    }
+
+    /// Returns `true` if the structure is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the value corresponding to the key, or [`None`] no such tag exists.
+    pub fn get(&self, key: &str) -> Option<&String> {
+        let key = key.to_lowercase();
+        self.tags.get(&key)
+    }
+
+    /// Returns `true` if there is a tag with the given key.
+    pub fn contains_key(&self, key: &str) -> bool {
+        let key = key.to_lowercase();
+        self.tags.contains_key(&key)
+    }
+
+    /// Inserts a new tag, overwriting the possible old value associated with the same key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key`: Key of the tag. The key is converted to lower case before it is inserted into the hash table.
+    /// * `value`: Value of the tag.
+    pub fn insert(&mut self, key: &str, value: &str) {
+        let key = key.to_lowercase();
+        let _ = self.tags.insert(key, value.to_string());
+    }
+
+    /// Returns an iterator that visits all tags in sorted order by keys.
+    ///
+    /// The type of `Item` is `(&`[`String`]`, &`[`String`]`)`.
+    pub fn iter(&self) -> TagIter<'_, String, String> {
+        self.tags.iter()
+    }
+
+    // Returns the array of keys and values in serialized order.
+    fn linearize(&self) -> StringArray {
+        let mut linearized: Vec<&str> = Vec::with_capacity(2 * self.len());
+        for (key, value) in self.iter() {
+            linearized.push(key); linearized.push(value);
+        }
+        StringArray::from(linearized)
+    }
+}
+
+impl Serialize for Tags {
+    fn serialize_header<T: io::Write>(&self, _: &mut T) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn serialize_body<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
+        let linearized = self.linearize();
+        linearized.serialize(writer)?;
+        Ok(())
+    }
+
+    fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
+        let linearized = StringArray::load(reader)?;
+        if linearized.len() % 2 != 0 {
+            return Err(Error::new(ErrorKind::InvalidData, "A tag has a key without a value"));
+        }
+        let mut result = Tags::new();
+        for i in 0..linearized.len() / 2 {
+            let key = linearized.str(2 * i).map_err(|_| Error::new(ErrorKind::InvalidData, "Invalid UTF-8 in a key"))?;
+            let value = linearized.str(2 * i + 1).map_err(|_| Error::new(ErrorKind::InvalidData, "Invalid UTF-8 in a value"))?;
+            result.insert(key, value);
+        }
+        if result.len() != linearized.len() / 2 {
+            return Err(Error::new(ErrorKind::InvalidData, "Tags with duplicate keys"));
+        }
+        Ok(result)
+    }
+
+    fn size_in_elements(&self) -> usize {
+        let linearized = self.linearize();
+        linearized.size_in_elements()
+    }
+}
+
+impl AsRef<BTreeMap<String, String>> for Tags {
+    #[inline]
+    fn as_ref(&self) -> &BTreeMap<String, String> {
+        &(self.tags)
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+// FIXME: ByteCode, Run
 
 //-----------------------------------------------------------------------------

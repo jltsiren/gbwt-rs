@@ -2,7 +2,24 @@ use super::*;
 
 use simple_sds::serialize;
 
+use std::fmt::Debug;
 use std::fs;
+
+//-----------------------------------------------------------------------------
+
+fn try_serialize<T: Serialize + PartialEq + Debug>(original: &T, name: &str) {
+    let filename = serialize::temp_file_name(name);
+    serialize::serialize_to(original, &filename).unwrap();
+
+    let metadata = fs::metadata(&filename).unwrap();
+    let len = metadata.len() as usize;
+    assert_eq!(original.size_in_bytes(), len, "Invalid size estimate for the serialized {}", name);
+
+    let copy: T = serialize::load_from(&filename).unwrap();
+    assert_eq!(copy, *original, "Serialization changed the {}", name);
+
+    fs::remove_file(&filename).unwrap();
+}
 
 //-----------------------------------------------------------------------------
 
@@ -48,26 +65,12 @@ fn check_array(array: &StringArray, truth: &[&str]) {
     }
 }
 
-fn serialize_array(array: &StringArray) {
-    let filename = serialize::temp_file_name("string-array");
-    serialize::serialize_to(array, &filename).unwrap();
-
-    let metadata = fs::metadata(&filename).unwrap();
-    let len = metadata.len() as usize;
-    assert_eq!(array.size_in_bytes(), len, "Invalid size estimate for the serialized StringArray");
-
-    let copy: StringArray = serialize::load_from(&filename).unwrap();
-    assert_eq!(copy, *array, "Serialization changed the StringArray");
-
-    fs::remove_file(&filename).unwrap();
-}
-
 #[test]
 fn empty_string_array() {
     let truth: Vec<&str> = Vec::new();
     let array = StringArray::from(truth.as_slice());
     check_array(&array, &truth);
-    serialize_array(&array);
+    try_serialize(&array, "StringArray");
 }
 
 #[test]
@@ -75,7 +78,7 @@ fn non_empty_string_array() {
     let truth = vec!["first", "second", "third", "fourth"];
     let array = StringArray::from(truth.as_slice());
     check_array(&array, &truth);
-    serialize_array(&array);
+    try_serialize(&array, "StringArray");
 }
 
 #[test]
@@ -84,7 +87,7 @@ fn array_with_empty_strings() {
     let truth = vec!["first", "second", "", "fourth", ""];
     let array = StringArray::from(truth.as_slice());
     check_array(&array, &truth);
-    serialize_array(&array);
+    try_serialize(&array, "StringArray");
 }
 
 //-----------------------------------------------------------------------------
@@ -105,23 +108,9 @@ fn check_dict(dict: &Dictionary, truth: &[&str], missing: &[&str]) {
     for i in 0..truth.len() {
         assert_eq!(dict.id(truth[i]), Some(i), "Invalid id for original string {}: {}", i, truth[i]);
     }
-    for i in 0..missing.len() {
-        assert_eq!(dict.id(missing[i]), None, "String {} should not be present", missing[i]);
+    for string in missing.iter() {
+        assert_eq!(dict.id(string), None, "String {} should not be present", string);
     }
-}
-
-fn serialize_dict(dict: &Dictionary) {
-    let filename = serialize::temp_file_name("dictionary");
-    serialize::serialize_to(dict, &filename).unwrap();
-
-    let metadata = fs::metadata(&filename).unwrap();
-    let len = metadata.len() as usize;
-    assert_eq!(dict.size_in_bytes(), len, "Invalid size estimate for the serialized Dictionary");
-
-    let copy: Dictionary = serialize::load_from(&filename).unwrap();
-    assert_eq!(copy, *dict, "Serialization changed the Dictionary");
-
-    fs::remove_file(&filename).unwrap();
 }
 
 #[test]
@@ -130,7 +119,7 @@ fn empty_dict() {
     let missing = vec!["this", "should", "not", "exist"];
     let dict = Dictionary::try_from(truth.as_slice()).unwrap();
     check_dict(&dict, &truth, &missing);
-    serialize_dict(&dict);
+    try_serialize(&dict, "Dictionary");
 }
 
 #[test]
@@ -139,7 +128,7 @@ fn non_empty_dict() {
     let missing = vec!["this", "should", "not", "exist"];
     let dict = Dictionary::try_from(truth.as_slice()).unwrap();
     check_dict(&dict, &truth, &missing);
-    serialize_dict(&dict);
+    try_serialize(&dict, "Dictionary");
 }
 
 #[test]
@@ -147,6 +136,91 @@ fn dict_from_duplicates() {
     let source = vec!["this", "contains", "contains", "many", "duplicates", "many", "this"];
     let result = Dictionary::try_from(source);
     assert!(result.is_err(), "Did not get an error from a source with duplicate strings");
+}
+
+//-----------------------------------------------------------------------------
+
+fn check_tags(tags: &Tags, truth: &BTreeMap<&str, &str>, missing: &[&str]) {
+    // Statistics.
+    assert_eq!(tags.len(), truth.len(), "Incorrect tags length");
+    assert_eq!(tags.is_empty(), truth.is_empty(), "Incorrect tags emptiness");
+
+    // Truth is present.
+    for (key, value) in truth.iter() {
+        assert!(tags.contains_key(key), "Key {} is missing", key);
+        assert_eq!(tags.get(key).unwrap(), value, "Invalid value for key {}", key);
+    }
+
+    // Keys and values are correct.
+    for (key, value) in tags.iter() {
+        assert!(truth.contains_key(key.as_str()), "Key {} is incorrect", key);
+        assert_eq!(truth.get(key.as_str()).unwrap(), value, "Incorrect value for key {}", key);
+    }
+
+    // Missing keys.
+    for key in missing.iter() {
+        assert!(!tags.contains_key(key), "Key {} should not be present", key);
+    }
+}
+
+#[test]
+fn empty_tags() {
+    let truth: BTreeMap<&str, &str> = BTreeMap::new();
+    let missing = vec!["this", "should", "not", "exist"];
+    let tags = Tags::new();
+    check_tags(&tags, &truth, &missing);
+    try_serialize(&tags, "Tags");
+}
+
+#[test]
+fn non_empty_tags() {
+    let mut truth: BTreeMap<&str, &str> = BTreeMap::new();
+    truth.insert("first-key", "first-value");
+    truth.insert("second-key", "second-value");
+    truth.insert("third-key", "third-value");
+    truth.insert("fourth-key", "fourth-value");
+    let missing = vec!["this", "should", "not", "exist"];
+    let mut tags = Tags::new();
+    for (key, value) in truth.iter() {
+        tags.insert(key, value);
+    }
+    check_tags(&tags, &truth, &missing);
+    try_serialize(&tags, "Tags");
+}
+
+#[test]
+fn case_insensitive_tags() {
+    let mut truth: BTreeMap<&str, &str> = BTreeMap::new();
+    truth.insert("first-key", "first-value");
+    truth.insert("second-key", "second-value");
+    truth.insert("third-key", "third-value");
+    truth.insert("fourth-key", "fourth-value");
+    let missing = vec!["this", "should", "not", "exist"];
+    let mut tags = Tags::new();
+    tags.insert("First-Key", "first-value");
+    tags.insert("second-Key", "second-value");
+    tags.insert("Third-key", "third-value");
+    tags.insert("fourth-key", "fourth-value");
+    check_tags(&tags, &truth, &missing);
+    try_serialize(&tags, "Tags");
+}
+
+#[test]
+fn duplicate_tags() {
+    let mut truth: BTreeMap<&str, &str> = BTreeMap::new();
+    truth.insert("first-key", "first-value");
+    truth.insert("second-key", "second-value");
+    truth.insert("third-key", "third-value");
+    truth.insert("fourth-key", "fourth-value");
+    let missing = vec!["this", "should", "not", "exist"];
+    let mut tags = Tags::new();
+    tags.insert("second-key", "incorrect-value");
+    tags.insert("Fourth-Key", "incorrect-value");
+    for (key, value) in truth.iter() {
+        tags.insert(key, value);
+    }
+    check_tags(&tags, &truth, &missing);
+    try_serialize(&tags, "Tags");
 }
 
 //-----------------------------------------------------------------------------
