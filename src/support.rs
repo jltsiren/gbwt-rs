@@ -139,7 +139,7 @@ impl StringArray {
 
         // Determine alphabet size.
         let sigma = bytes_to_packed.iter().sum();
-        let width = cmp::max(sigma, 1);
+        let width = bits::bit_len(cmp::max(sigma, 1) as u64 - 1);
 
         // Build the alphabet mappings.
         let mut packed_to_bytes: Vec<u8> = vec![0; sigma];

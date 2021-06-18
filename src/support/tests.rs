@@ -2,25 +2,6 @@ use super::*;
 
 use simple_sds::serialize;
 
-use std::fmt::Debug;
-use std::fs;
-
-//-----------------------------------------------------------------------------
-
-fn try_serialize<T: Serialize + PartialEq + Debug>(original: &T, name: &str) {
-    let filename = serialize::temp_file_name(name);
-    serialize::serialize_to(original, &filename).unwrap();
-
-    let metadata = fs::metadata(&filename).unwrap();
-    let len = metadata.len() as usize;
-    assert_eq!(original.size_in_bytes(), len, "Invalid size estimate for the serialized {}", name);
-
-    let copy: T = serialize::load_from(&filename).unwrap();
-    assert_eq!(copy, *original, "Serialization changed the {}", name);
-
-    fs::remove_file(&filename).unwrap();
-}
-
 //-----------------------------------------------------------------------------
 
 fn check_array(array: &StringArray, truth: &[&str]) {
@@ -70,7 +51,7 @@ fn empty_string_array() {
     let truth: Vec<&str> = Vec::new();
     let array = StringArray::from(truth.as_slice());
     check_array(&array, &truth);
-    try_serialize(&array, "StringArray");
+    let _ = serialize::test(&array, "empty-string-array", None, true);
 }
 
 #[test]
@@ -78,7 +59,7 @@ fn non_empty_string_array() {
     let truth = vec!["first", "second", "third", "fourth"];
     let array = StringArray::from(truth.as_slice());
     check_array(&array, &truth);
-    try_serialize(&array, "StringArray");
+    let _ = serialize::test(&array, "non-empty-string-array", None, true);
 }
 
 #[test]
@@ -87,7 +68,7 @@ fn array_with_empty_strings() {
     let truth = vec!["first", "second", "", "fourth", ""];
     let array = StringArray::from(truth.as_slice());
     check_array(&array, &truth);
-    try_serialize(&array, "StringArray");
+    let _ = serialize::test(&array, "string-array-with-empty", None, true);
 }
 
 //-----------------------------------------------------------------------------
@@ -119,7 +100,7 @@ fn empty_dict() {
     let missing = vec!["this", "should", "not", "exist"];
     let dict = Dictionary::try_from(truth.as_slice()).unwrap();
     check_dict(&dict, &truth, &missing);
-    try_serialize(&dict, "Dictionary");
+    let _ = serialize::test(&dict, "empty-dict", None, true);
 }
 
 #[test]
@@ -128,7 +109,7 @@ fn non_empty_dict() {
     let missing = vec!["this", "should", "not", "exist"];
     let dict = Dictionary::try_from(truth.as_slice()).unwrap();
     check_dict(&dict, &truth, &missing);
-    try_serialize(&dict, "Dictionary");
+    let _ = serialize::test(&dict, "non-empty-dict", None, true);
 }
 
 #[test]
@@ -169,7 +150,7 @@ fn empty_tags() {
     let missing = vec!["this", "should", "not", "exist"];
     let tags = Tags::new();
     check_tags(&tags, &truth, &missing);
-    try_serialize(&tags, "Tags");
+    let _ = serialize::test(&tags, "empty-tags", None, true);
 }
 
 #[test]
@@ -185,7 +166,7 @@ fn non_empty_tags() {
         tags.insert(key, value);
     }
     check_tags(&tags, &truth, &missing);
-    try_serialize(&tags, "Tags");
+    let _ = serialize::test(&tags, "non-empty-tags", None, true);
 }
 
 #[test]
@@ -202,7 +183,7 @@ fn case_insensitive_tags() {
     tags.insert("Third-key", "third-value");
     tags.insert("fourth-key", "fourth-value");
     check_tags(&tags, &truth, &missing);
-    try_serialize(&tags, "Tags");
+    let _ = serialize::test(&tags, "case-insensitive-tags", None, true);
 }
 
 #[test]
@@ -220,7 +201,7 @@ fn duplicate_tags() {
         tags.insert(key, value);
     }
     check_tags(&tags, &truth, &missing);
-    try_serialize(&tags, "Tags");
+    let _ = serialize::test(&tags, "duplicate-tags", None, true);
 }
 
 //-----------------------------------------------------------------------------
