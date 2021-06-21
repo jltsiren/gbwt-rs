@@ -12,6 +12,7 @@ use std::collections::btree_map::Iter as TagIter;
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
+use std::slice::Iter as SliceIter;
 use std::str::Utf8Error;
 use std::{cmp, io};
 
@@ -575,6 +576,388 @@ impl AsRef<BTreeMap<String, String>> for Tags {
 
 //-----------------------------------------------------------------------------
 
-// FIXME: ByteCode, Run
+// FIXME tests
+/// A variable-length encoder for unsigned integers.
+///
+/// `ByteCode` encodes an integer as a sequence of bytes in little-endian order and stores it in the internal [`Vec`].
+/// Each byte contains 7 bits of data, and the high bit indicates whether the encoding continues.
+/// The bytes can be accessed with [`AsRef`], and [`ByteCodeIter`] can be used for decoding the integers.
+///
+/// The following functions can for creating a byte stream with various encodings:
+///
+/// * [`ByteCode::write_byte`] and [`RLE::write_byte`] append a byte to the encoding.
+/// * [`ByteCode::from_rle`] converts [`RLE`] to `ByteCode`.
+/// * [`RLE::from_byte_code`] converts `ByteCode` to [`RLE`].
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::support::ByteCode;
+///
+/// let mut encoder = ByteCode::new();
+/// encoder.write(123); encoder.write(456); encoder.write(789);
+/// let bytes = encoder.as_ref();
+/// assert_eq!(*bytes, [123, 72 + 128, 3, 21 + 128, 6]);
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ByteCode {
+    bytes: Vec<u8>
+}
+
+impl ByteCode {
+    const MASK: u8 = 0x7F;
+    const FLAG: u8 = 0x80;
+    const SHIFT: usize = 7;
+
+    /// Creates a new encoder.
+    pub fn new() -> Self {
+        ByteCode {
+            bytes: Vec::new(),
+        }
+    }
+
+    /// Converts the [`RLE`] to `ByteCode`.
+    pub fn from_rle(rle: RLE) -> Self {
+        rle.bytes
+    }
+
+    /// Encodes `value` and stores the encoding.
+    pub fn write(&mut self, value: usize) {
+        let mut value = value;
+        while value > (Self::MASK as usize) {
+            self.bytes.push(((value as u8) & Self::MASK) | Self::FLAG);
+            value >>= Self::SHIFT;
+        }
+        self.bytes.push(value as u8);
+    }
+
+    /// Appends a byte to the encoding.
+    pub fn write_byte(&mut self, byte: u8) {
+        self.bytes.push(byte);
+    }
+}
+
+impl AsRef<[u8]> for ByteCode {
+    fn as_ref(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
+// FIXME tests
+/// An iterator that decodes integers from a byte stream encoded by [`ByteCode`].
+///
+/// The type of `Item` is [`usize`].
+/// A `ByteCodeIter` can be built from a byte slice with [`ByteCodeIter::from_bytes`] or from any iterator with `&`[`u8`] as the type of `Item` using [`From`]. 
+///
+/// The following functions can be used if the byte stream contains a mix of various encodings:
+///
+/// * [`ByteCodeIter::byte`] and [`RLEIter::byte`] return the next byte from the stream.
+/// * [`ByteCodeIter::from_rle`] converts [`RLEIter`] to `ByteCodeIter`.
+/// * [`RLEIter::from_byte_code`] converts `ByteCodeIter` to [`RLEIter`].
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::support::{ByteCode, ByteCodeIter};
+///
+/// let mut source = ByteCode::new();
+/// source.write(123); source.write(456); source.write(789);
+///
+/// let mut iter = ByteCodeIter::from_bytes(source.as_ref());
+/// assert_eq!(iter.next(), Some(123));
+/// assert_eq!(iter.next(), Some(456));
+/// assert_eq!(iter.next(), Some(789));
+/// assert_eq!(iter.next(), None);
+/// ```
+#[derive(Clone, Debug)]
+pub struct ByteCodeIter<'a, T: Iterator<Item = &'a u8>> {
+    source: T,
+}
+
+impl<'a, T: Iterator<Item = &'a u8>> ByteCodeIter<'a, T> {
+    /// Converts the [`RLEIter`] to a `ByteCodeIter` over the same byte stream.
+    pub fn from_rle(rle_iter: RLEIter<'a, T>) -> Self {
+        rle_iter.source
+    }
+
+    /// Returns the next byte from the byte stream.
+    pub fn byte(&mut self) -> Option<&u8> {
+        self.source.next()
+    }
+}
+
+impl<'a> ByteCodeIter<'a, SliceIter<'a, u8>> {
+    /// Creates a new iterator from a byte slice.
+    pub fn from_bytes(bytes: &'a [u8]) -> Self {
+        ByteCodeIter {
+            source: bytes.iter()
+        }
+    }
+}
+
+impl<'a, T: Iterator<Item = &'a u8>> Iterator for ByteCodeIter<'a, T> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut offset = 0;
+        let mut result = 0;
+        while let Some(value) = self.source.next() {
+            result += ((value & ByteCode::MASK) as usize) << offset;
+            offset += ByteCode::SHIFT;
+            if value & ByteCode::FLAG == 0 {
+                return Some(result)
+            }
+        }
+        None
+    }
+}
+
+impl<'a, T: Iterator<Item = &'a u8>> From<T> for ByteCodeIter<'a, T> {
+    fn from(iter: T) -> Self {
+        ByteCodeIter {
+            source: iter,
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+// FIXME test (alphabet sizes; GBWT record)
+/// A run-length encoder for non-empty runs of unsigned integers.
+///
+/// The exact encoding depends on alphabet size `sigma`.
+/// If `sigma` is small, the encoder tries to encode short runs as a single byte.
+/// For long runs, the remaining run length is encoded using [`ByteCode`].
+/// For a large `sigma`, both the value and the run length are encoded using [`ByteCode`].
+/// Alphabet size `sigma == 0` indicates a large alphabet of unknown size.
+///
+/// The following functions can for creating a byte stream with various encodings:
+///
+/// * [`ByteCode::write_byte`] and [`RLE::write_byte`] append a byte to the encoding.
+/// * [`ByteCode::from_rle`] converts `RLE` to [`ByteCode`].
+/// * [`RLE::from_byte_code`] converts [`ByteCode`] to `RLE`.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::support::RLE;
+///
+/// let mut encoder = RLE::new(4);
+/// encoder.write(3, 12); encoder.write(2, 721); encoder.write(0, 34);
+/// assert_eq!(*encoder.as_ref(), [3 + 4 * 11, 2 + 4 * 63, 17 + 128, 5, 0 + 4 * 33]);
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RLE {
+    bytes: ByteCode,
+    sigma: usize,
+    threshold: usize,
+}
+
+impl RLE {
+    const THRESHOLD: usize = 255;
+    const UNIVERSE: usize = 256;
+
+    /// Creates a new encoder with the given alphabet size.
+    pub fn new(sigma: usize) -> Self {
+        let (sigma, threshold) = Self::sanitize(sigma);
+        RLE {
+            bytes: ByteCode::new(),
+            sigma: sigma,
+            threshold: threshold,
+        }
+    }
+
+    /// Converts the [`ByteCode`] to `RLE`.
+    ///
+    /// # Arguments
+    ///
+    /// * `byte_code`: Byte code encoder.
+    /// * `sigma`: Alphabet size.
+    pub fn from_byte_code(byte_code: ByteCode, sigma: usize) -> Self {
+        let (sigma, threshold) = Self::sanitize(sigma);
+        RLE {
+            bytes: byte_code,
+            sigma: sigma,
+            threshold: threshold,
+        }
+    }
+
+    /// Encodes a run of `len` copies of value `value` and stores the encoding.
+    ///
+    /// Does nothing if `len == 0`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value >= self.sigma()`.
+    pub fn write(&mut self, value: usize, len: usize) {
+        if len == 0 {
+            return;
+        }
+        if value >= self.sigma {
+            panic!("RLE: Cannot encode value {} with alphabet size {}", value, self.sigma);
+        }
+        unsafe { self.write_unchecked(value, len); }
+    }
+
+    /// Encodes a run of `len` copies of value `value` and stores the encoding.
+    ///
+    /// Behavior is undefined if `len == 0` or `value >= self.sigma()`.
+    pub unsafe fn write_unchecked(&mut self, value: usize, len: usize) {
+        if self.sigma >= Self::THRESHOLD {
+            self.bytes.write(value);
+            self.bytes.write(len - 1);
+        } else if len < self.threshold {
+            self.write_basic(value, len);
+        } else {
+            self.write_basic(value, self.threshold);
+            self.bytes.write(len - self.threshold);
+        }
+    }
+
+    /// Appends a byte to the encoding.
+    pub fn write_byte(&mut self, byte: u8) {
+        self.bytes.write_byte(byte);
+    }
+
+    /// Returns the alphabet size.
+    pub fn sigma(&self) -> usize {
+        self.sigma
+    }
+
+    // Writes a single-byte run.
+    fn write_basic(&mut self, value: usize, len: usize) {
+        let code = value + self.sigma * (len - 1);
+        self.bytes.bytes.push(code as u8);
+    }
+
+    // Returns (effective sigma, threshold for short runs).
+    fn sanitize(sigma: usize) -> (usize, usize) {
+        let sigma = if sigma == 0 { usize::MAX } else { sigma };
+        let threshold = if sigma < Self::THRESHOLD { Self::UNIVERSE / sigma } else { 0 };
+        (sigma, threshold)
+    }
+}
+
+impl AsRef<[u8]> for RLE {
+    fn as_ref(&self) -> &[u8] {
+        self.bytes.as_ref()
+    }
+}
+
+// FIXME tests (small sigma, sigma == 254, sigma == 255, large sigma; test runs near threshold lengths)
+/// An iterator that decodes runs from a byte stream encoded by [`RLE`].
+///
+/// The type of `Item` is `(`[`usize`]`, `[`usize`]`)`.
+/// An `RLEIter` can be built from a byte slice with [`RLEIter::from_bytes`] or from any iterator with `&`[`u8`] as the type of `Item` using [`RLEIter::new`]. 
+/// Alphabet size `sigma == 0` indicates a large alphabet of unknown size.
+///
+/// The following functions can be used if the byte stream contains a mix of various encodings:
+///
+/// * [`ByteCodeIter::byte`] and [`RLEIter::byte`] return the next byte from the stream.
+/// * [`ByteCodeIter::from_rle`] converts `RLEIter` to [`ByteCodeIter`].
+/// * [`RLEIter::from_byte_code`] converts [`ByteCodeIter`] to `RLEIter`.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::support::{RLE, RLEIter};
+///
+/// let mut source = RLE::new(4);
+/// source.write(3, 12); source.write(2, 721); source.write(0, 34);
+///
+/// let mut iter = RLEIter::new(source.as_ref().iter(), 4);
+/// assert_eq!(iter.next(), Some((3, 12)));
+/// assert_eq!(iter.next(), Some((2, 721)));
+/// assert_eq!(iter.next(), Some((0, 34)));
+/// assert_eq!(iter.next(), None);
+/// ```
+#[derive(Clone, Debug)]
+pub struct RLEIter<'a, T: Iterator<Item = &'a u8>> {
+    source: ByteCodeIter<'a, T>,
+    sigma: usize,
+    threshold: usize,
+}
+
+impl<'a, T: Iterator<Item = &'a u8>> RLEIter<'a, T> {
+    /// Creates a new iterator.
+    ///
+    /// # Arguments
+    ///
+    /// * `source`: Iterator over the byte stream.
+    /// * `sigma`: Alphabet size.
+    pub fn new(source: T, sigma: usize) -> Self {
+        let (sigma, threshold) = RLE::sanitize(sigma);
+        RLEIter {
+            source: ByteCodeIter::from(source),
+            sigma: sigma,
+            threshold: threshold,
+        }
+    }
+
+    /// Converts the [`ByteCodeIter`] to `RLEIter`
+    ///
+    /// # Arguments
+    ///
+    /// * `byte_code`: Byte code iterator.
+    /// * `sigma`: Alphabet size.
+    pub fn from_byte_code(byte_code: ByteCodeIter<'a, T>, sigma: usize) -> Self {
+        let (sigma, threshold) = RLE::sanitize(sigma);
+        RLEIter {
+            source: byte_code,
+            sigma: sigma,
+            threshold: threshold,
+        }
+    }
+
+    /// Returns the next byte from the byte stream.
+    pub fn byte(&mut self) -> Option<&u8> {
+        self.source.byte()
+    }
+
+    /// Returns the alphabet size.
+    pub fn sigma(&self) -> usize {
+        self.sigma
+    }
+}
+
+impl<'a> RLEIter<'a, SliceIter<'a, u8>> {
+    /// Creates a new iterator from a byte slice.
+    ///
+    /// # Arguments
+    ///
+    /// * `bytes`: Byte slice.
+    /// * `sigma`: Alphabet size.
+    pub fn from_bytes(bytes: &'a [u8], sigma: usize) -> Self {
+        let (sigma, threshold) = RLE::sanitize(sigma);
+        RLEIter {
+            source: ByteCodeIter::from_bytes(bytes),
+            sigma: sigma,
+            threshold: threshold,
+        }
+    }
+}
+
+impl<'a, T: Iterator<Item = &'a u8>> Iterator for RLEIter<'a, T> {
+    type Item = (usize, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut run = (0, 0);
+        if self.sigma >= 255 {
+            if let Some(value) = self.source.next() { run.0 = value; } else { return None; }
+            if let Some(len) = self.source.next() { run.1 = len + 1; } else { return None; }
+        } else {
+            if let Some(byte) = self.source.byte() {
+                run.0 = (*byte as usize) % self.sigma;
+                run.1 = (*byte as usize) / self.sigma + 1;
+            } else {
+                return None;
+            }
+            if run.1 == self.threshold {
+                if let Some(len) = self.source.next() { run.1 += len; } else { return None; }
+            }
+        }
+        return Some(run);
+    }
+}
 
 //-----------------------------------------------------------------------------
