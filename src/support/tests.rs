@@ -2,6 +2,9 @@ use super::*;
 
 use simple_sds::serialize;
 
+use rand::Rng;
+use rand::rngs::ThreadRng;
+
 //-----------------------------------------------------------------------------
 
 fn check_array(array: &StringArray, truth: &[&str]) {
@@ -202,6 +205,165 @@ fn duplicate_tags() {
     }
     check_tags(&tags, &truth, &missing);
     let _ = serialize::test(&tags, "duplicate-tags", None, true);
+}
+
+//-----------------------------------------------------------------------------
+
+// Generate a random value, with the width (almost) geometrically distributed (p = 0.5) in blocks of `w` bits.
+fn generate_value(rng: &mut ThreadRng, w: usize) -> usize {
+    let len = (rng.gen::<usize>() | 1).leading_zeros() as usize; // 0 to 63
+    let width = cmp::min((len + 1) * w, bits::WORD_BITS);
+    let mask = bits::low_set(width) as usize;
+    rng.gen::<usize>() & mask
+}
+
+// Generate `n` random values, with the widths (almost) geometrically distributed (p = 0.5) in blocks of `w` bits.
+fn generate_values(n: usize, w: usize) -> Vec<usize> {
+    let mut result = Vec::with_capacity(n);
+    let mut rng = rand::thread_rng();
+    for _ in 0..n {
+        result.push(generate_value(&mut rng, w));
+    }
+    result
+}
+
+#[test]
+fn random_byte_code() {
+    let values = generate_values(647, 4);
+    let mut encoder = ByteCode::new();
+    assert_eq!(encoder.len(), 0, "Newly created encoder contains bytes");
+    assert!(encoder.is_empty(), "Newly created encoder is not empty");
+    for value in values.iter() {
+        encoder.write(*value);
+    }
+    assert!(encoder.len() >= values.len(), "The encoding is shorter than the number of values");
+    assert!(!encoder.is_empty(), "The encoding is empty");
+
+    let iter = ByteCodeIter::from_bytes(encoder.as_ref());
+    let decoded: Vec<usize> = iter.collect();
+    assert_eq!(decoded.len(), values.len(), "Invalid number of decoded values");
+    for i in 0..decoded.len() {
+        assert_eq!(decoded[i], values[i], "Invalid decoded value {}", i);
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+// Generate `n` random runs from an alphabet of size `sigma`.
+// The widths of run lengths are (almost) geometrically distributed (p = 0.5) in blocks of `w` bits.
+fn generate_runs(n: usize, sigma: usize, w: usize) -> Vec<(usize, usize)> {
+    let sigma = if sigma == 0 { usize::MAX } else { sigma };
+    let mut result = Vec::with_capacity(n);
+    let mut rng = rand::thread_rng();
+    for _ in 0..n {
+        let c: usize = rng.gen_range(0, sigma);
+        let len = generate_value(&mut rng, w) + 1;
+        result.push((c, len));
+    }
+    result
+}
+
+fn encode_runs(encoder: &mut RLE, runs: &[(usize, usize)], name: &str) {
+    assert_eq!(encoder.len(), 0, "[{}]: Newly created encoder contains runs", name);
+    assert!(encoder.is_empty(), "[{}]: Newly created encoder is not empty", name);
+    for (c, len) in runs.iter() {
+        encoder.write(*c, *len);
+    }
+    assert!(encoder.len() >= runs.len(), "[{}]: The encoding is shorter than the number of runs", name);
+    assert!(!encoder.is_empty(), "[{}]: The encoding is empty", name);
+}
+
+fn check_runs(encoder: &RLE, truth: &[(usize, usize)], name: &str) {
+    let iter = RLEIter::from_bytes(encoder.as_ref(), encoder.sigma());
+    let decoded: Vec<(usize, usize)> = iter.collect();
+    assert_eq!(decoded.len(), truth.len(), "[{}]: Invalid number of decoded runs", name);
+    for i in 0..decoded.len() {
+        assert_eq!(decoded[i], truth[i], "[{}]: Invalid decoded run {}", name, i);
+    }
+}
+
+fn test_rle(n: usize, sigma: usize, name: &str) {
+    let runs = generate_runs(n, sigma, 4);
+    let mut encoder = RLE::new(sigma);
+    encode_runs(&mut encoder, &runs, name);
+    check_runs(&encoder, &runs, name);
+}
+
+fn add_run(encoder: &mut RLE, truth: &mut Vec<(usize, usize)>, len: usize, bytes: usize, name: &str) {
+    let old_len = encoder.len();
+    encoder.write(encoder.sigma() - 1, len);
+    truth.push((encoder.sigma() - 1, len));
+    assert_eq!(encoder.len() - old_len, bytes, "[{}]: Run of length {} not encoded using {} byte(s)", name, len, bytes);
+}
+
+fn test_threshold(sigma: usize, name: &str) {
+    let (sigma, threshold) = RLE::sanitize(sigma);
+    let mut encoder = RLE::new(sigma);
+    let mut truth: Vec<(usize, usize)> = Vec::new();
+    if threshold > 1 {
+        add_run(&mut encoder, &mut truth, threshold - 1, 1, name);
+    }
+    if threshold > 0 {
+        add_run(&mut encoder, &mut truth, threshold, 2, name);
+    }
+    check_runs(&encoder, &truth, name);
+}
+
+#[test]
+fn runs_with_sigma() {
+    test_rle(591, 4, "sigma == 4");
+    test_rle(366, 254, "sigma == 254");
+    test_rle(421, 255, "sigma == 255");
+    test_rle(283, 14901, "sigma == 14901");
+    test_rle(330, 0, "sigma == 0");
+}
+
+#[test]
+fn run_length_thresholds() {
+    test_threshold(1, "sigma == 1");
+    test_threshold(4, "sigma == 4");
+    test_threshold(5, "sigma == 5");
+    test_threshold(128, "sigma == 128");
+    test_threshold(129, "sigma == 129");
+    test_threshold(254, "sigma == 254");
+}
+
+#[test]
+fn gbwt_record() {
+    // Original data for the record.
+    let sigma = 4;
+    let edges: Vec<(usize, usize)> = vec![(0, 0), (13, 7), (22, 1), (44, 0)];
+    let runs = generate_runs(8, sigma, 4);
+
+    // Encode the record.
+    let mut encoder = ByteCode::new();
+    encoder.write(sigma);
+    let mut prev = 0;
+    for (node, offset) in edges.iter() {
+        encoder.write(*node - prev); encoder.write(*offset);
+        prev = *node;
+    }
+    let mut encoder = RLE::from_byte_code(encoder, sigma);
+    for (c, len) in runs.iter() {
+        encoder.write(*c, *len);
+    }
+
+    // Decompress the record.
+    let mut iter = ByteCodeIter::from_bytes(encoder.as_ref());
+    assert_eq!(iter.next(), Some(sigma), "Invalid alphabet size in the record");
+    let mut prev = 0;
+    for i in 0..sigma {
+        let node = iter.next().unwrap() + prev;
+        assert_eq!(node, edges[i].0, "Invalid successor node {}", i);
+        prev = node;
+        assert_eq!(iter.next(), Some(edges[i].1), "Invalid record offset for edge {}", i);
+    }
+    let iter = RLEIter::from_byte_code(iter, sigma);
+    let decoded: Vec<(usize, usize)> = iter.collect();
+    assert_eq!(decoded.len(), runs.len(), "Invalid number of runs");
+    for i in 0..decoded.len() {
+        assert_eq!(decoded[i], runs[i], "Invalid run {}", i);
+    }
 }
 
 //-----------------------------------------------------------------------------

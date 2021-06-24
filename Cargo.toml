@@ -10,3 +10,6 @@ repository = "https://github.com/jltsiren/gbwt-rs"
 
 [dependencies]
 simple-sds = { git = "https://github.com/jltsiren/simple-sds", branch = "main" }
+
+[dev-dependencies]
+rand = "0.7"

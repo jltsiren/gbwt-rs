@@ -576,7 +576,6 @@ impl AsRef<BTreeMap<String, String>> for Tags {
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// A variable-length encoder for unsigned integers.
 ///
 /// `ByteCode` encodes an integer as a sequence of bytes in little-endian order and stores it in the internal [`Vec`].
@@ -635,6 +634,16 @@ impl ByteCode {
     pub fn write_byte(&mut self, byte: u8) {
         self.bytes.push(byte);
     }
+
+    /// Returns the total number of bytes in the encoding.
+    pub fn len(&self) -> usize {
+        self.bytes.len()
+    }
+
+    /// Returns `true` if the encoding is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl AsRef<[u8]> for ByteCode {
@@ -643,7 +652,6 @@ impl AsRef<[u8]> for ByteCode {
     }
 }
 
-// FIXME tests
 /// An iterator that decodes integers from a byte stream encoded by [`ByteCode`].
 ///
 /// The type of `Item` is [`usize`].
@@ -722,7 +730,6 @@ impl<'a, T: Iterator<Item = &'a u8>> From<T> for ByteCodeIter<'a, T> {
 
 //-----------------------------------------------------------------------------
 
-// FIXME test (alphabet sizes; GBWT record)
 /// A run-length encoder for non-empty runs of unsigned integers.
 ///
 /// The exact encoding depends on alphabet size `sigma`.
@@ -819,6 +826,16 @@ impl RLE {
         self.bytes.write_byte(byte);
     }
 
+    /// Returns the total number of bytes in the encoding.
+    pub fn len(&self) -> usize {
+        self.bytes.len()
+    }
+
+    /// Returns `true` if the encoding is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Returns the alphabet size.
     pub fn sigma(&self) -> usize {
         self.sigma
@@ -844,7 +861,6 @@ impl AsRef<[u8]> for RLE {
     }
 }
 
-// FIXME tests (small sigma, sigma == 254, sigma == 255, large sigma; test runs near threshold lengths)
 /// An iterator that decodes runs from a byte stream encoded by [`RLE`].
 ///
 /// The type of `Item` is `(`[`usize`]`, `[`usize`]`)`.
@@ -942,7 +958,7 @@ impl<'a, T: Iterator<Item = &'a u8>> Iterator for RLEIter<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut run = (0, 0);
-        if self.sigma >= 255 {
+        if self.sigma >= RLE::THRESHOLD {
             if let Some(value) = self.source.next() { run.0 = value; } else { return None; }
             if let Some(len) = self.source.next() { run.1 = len + 1; } else { return None; }
         } else {
