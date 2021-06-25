@@ -8,7 +8,7 @@
 //! * See [Simple-SDS](https://github.com/jltsiren/simple-sds) for assumptions on the environment.
 //! * This implementation supports the Simple-SDS file formats for [GBWT](https://github.com/jltsiren/gbwt/SERIALIZATION.md) and [GBZ](https://github.com/jltsiren/gbwtgraph/SERIALIZATION.md).
 
-//pub mod bwt;
+pub mod bwt;
 pub mod support;
 
 // mod gbwt: GBWT

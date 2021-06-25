@@ -197,7 +197,7 @@ impl Serialize for StringArray {
 
         // Sanity checks.
         if index.get(0) != 0 {
-            return Err(Error::new(ErrorKind::InvalidData, "First string does not start at offset 0"));
+            return Err(Error::new(ErrorKind::InvalidData, "StringArray: First string does not start at offset 0"));
         }
         Ok(StringArray {
             index: index,
@@ -546,16 +546,16 @@ impl Serialize for Tags {
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
         let linearized = StringArray::load(reader)?;
         if linearized.len() % 2 != 0 {
-            return Err(Error::new(ErrorKind::InvalidData, "A tag has a key without a value"));
+            return Err(Error::new(ErrorKind::InvalidData, "Tags: Key without a value"));
         }
         let mut result = Tags::new();
         for i in 0..linearized.len() / 2 {
-            let key = linearized.str(2 * i).map_err(|_| Error::new(ErrorKind::InvalidData, "Invalid UTF-8 in a key"))?;
-            let value = linearized.str(2 * i + 1).map_err(|_| Error::new(ErrorKind::InvalidData, "Invalid UTF-8 in a value"))?;
+            let key = linearized.str(2 * i).map_err(|_| Error::new(ErrorKind::InvalidData, "Tags: Invalid UTF-8 in a key"))?;
+            let value = linearized.str(2 * i + 1).map_err(|_| Error::new(ErrorKind::InvalidData, "Tags: Invalid UTF-8 in a value"))?;
             result.insert(key, value);
         }
         if result.len() != linearized.len() / 2 {
-            return Err(Error::new(ErrorKind::InvalidData, "Tags with duplicate keys"));
+            return Err(Error::new(ErrorKind::InvalidData, "Tags: Duplicate keys"));
         }
         Ok(result)
     }
