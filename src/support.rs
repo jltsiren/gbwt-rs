@@ -12,7 +12,6 @@ use std::collections::btree_map::Iter as TagIter;
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
-use std::slice::Iter as SliceIter;
 use std::str::Utf8Error;
 use std::{cmp, io};
 
@@ -636,30 +635,32 @@ impl ByteCode {
     }
 
     /// Returns the total number of bytes in the encoding.
+    #[inline]
     pub fn len(&self) -> usize {
         self.bytes.len()
     }
 
     /// Returns `true` if the encoding is empty.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 }
 
 impl AsRef<[u8]> for ByteCode {
+    #[inline]
     fn as_ref(&self) -> &[u8] {
         &self.bytes
     }
 }
 
-/// An iterator that decodes integers from a byte stream encoded by [`ByteCode`].
+/// An iterator that decodes integers from a byte slice encoded by [`ByteCode`].
 ///
 /// The type of `Item` is [`usize`].
-/// A `ByteCodeIter` can be built from a byte slice with [`ByteCodeIter::from_bytes`] or from any iterator with `&`[`u8`] as the type of `Item` using [`From`]. 
 ///
-/// The following functions can be used if the byte stream contains a mix of various encodings:
+/// The following functions can be used if the slice contains a mix of various encodings:
 ///
-/// * [`ByteCodeIter::byte`] and [`RLEIter::byte`] return the next byte from the stream.
+/// * [`ByteCodeIter::byte`] and [`RLEIter::byte`] return the next byte.
 /// * [`ByteCodeIter::from_rle`] converts [`RLEIter`] to `ByteCodeIter`.
 /// * [`RLEIter::from_byte_code`] converts `ByteCodeIter` to [`RLEIter`].
 ///
@@ -671,62 +672,69 @@ impl AsRef<[u8]> for ByteCode {
 /// let mut source = ByteCode::new();
 /// source.write(123); source.write(456); source.write(789);
 ///
-/// let mut iter = ByteCodeIter::from_bytes(source.as_ref());
+/// let mut iter = ByteCodeIter::new(source.as_ref());
 /// assert_eq!(iter.next(), Some(123));
 /// assert_eq!(iter.next(), Some(456));
 /// assert_eq!(iter.next(), Some(789));
 /// assert_eq!(iter.next(), None);
 /// ```
 #[derive(Clone, Debug)]
-pub struct ByteCodeIter<'a, T: Iterator<Item = &'a u8>> {
-    source: T,
+pub struct ByteCodeIter<'a> {
+    bytes: &'a [u8],
+    offset: usize,
 }
 
-impl<'a, T: Iterator<Item = &'a u8>> ByteCodeIter<'a, T> {
+impl<'a> ByteCodeIter<'a> {
+    /// Returns an iterator over the byte slice.
+    pub fn new(bytes: &'a [u8]) -> Self {
+        ByteCodeIter {
+            bytes: bytes,
+            offset: 0,
+        }
+    }
+
     /// Converts the [`RLEIter`] to a `ByteCodeIter` over the same byte stream.
-    pub fn from_rle(rle_iter: RLEIter<'a, T>) -> Self {
+    pub fn from_rle(rle_iter: RLEIter<'a>) -> Self {
         rle_iter.source
     }
 
-    /// Returns the next byte from the byte stream.
-    pub fn byte(&mut self) -> Option<&u8> {
-        self.source.next()
-    }
-}
-
-impl<'a> ByteCodeIter<'a, SliceIter<'a, u8>> {
-    /// Creates a new iterator from a byte slice.
-    pub fn from_bytes(bytes: &'a [u8]) -> Self {
-        ByteCodeIter {
-            source: bytes.iter()
+    /// Returns the next byte or `None` if the iterator has reached the end.
+    pub fn byte(&mut self) -> Option<u8> {
+        if self.offset >= self.bytes.len() {
+            return None;
         }
+        let result = Some(self.bytes[self.offset]);
+        self.offset += 1;
+        result
+    }
+
+    /// Returns the first unvisited offset in the byte slice.
+    #[inline]
+    pub fn offset(&self) -> usize {
+        self.offset
     }
 }
 
-impl<'a, T: Iterator<Item = &'a u8>> Iterator for ByteCodeIter<'a, T> {
+impl<'a> Iterator for ByteCodeIter<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut offset = 0;
         let mut result = 0;
-        while let Some(value) = self.source.next() {
+        while self.offset < self.bytes.len() {
+            let value = unsafe { *self.bytes.get_unchecked(self.offset) };
+            self.offset += 1;
             result += ((value & ByteCode::MASK) as usize) << offset;
             offset += ByteCode::SHIFT;
             if value & ByteCode::FLAG == 0 {
-                return Some(result)
+                return Some(result);
             }
         }
         None
     }
 }
 
-impl<'a, T: Iterator<Item = &'a u8>> From<T> for ByteCodeIter<'a, T> {
-    fn from(iter: T) -> Self {
-        ByteCodeIter {
-            source: iter,
-        }
-    }
-}
+impl<'a> FusedIterator for ByteCodeIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
@@ -827,16 +835,19 @@ impl RLE {
     }
 
     /// Returns the total number of bytes in the encoding.
+    #[inline]
     pub fn len(&self) -> usize {
         self.bytes.len()
     }
 
     /// Returns `true` if the encoding is empty.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Returns the alphabet size.
+    #[inline]
     pub fn sigma(&self) -> usize {
         self.sigma
     }
@@ -856,20 +867,20 @@ impl RLE {
 }
 
 impl AsRef<[u8]> for RLE {
+    #[inline]
     fn as_ref(&self) -> &[u8] {
         self.bytes.as_ref()
     }
 }
 
-/// An iterator that decodes runs from a byte stream encoded by [`RLE`].
+/// An iterator that decodes runs from a byte slice encoded by [`RLE`].
 ///
 /// The type of `Item` is `(`[`usize`]`, `[`usize`]`)`.
-/// An `RLEIter` can be built from a byte slice with [`RLEIter::from_bytes`] or from any iterator with `&`[`u8`] as the type of `Item` using [`RLEIter::new`]. 
 /// Alphabet size `sigma == 0` indicates a large alphabet of unknown size.
 ///
-/// The following functions can be used if the byte stream contains a mix of various encodings:
+/// The following functions can be used if the slice contains a mix of various encodings:
 ///
-/// * [`ByteCodeIter::byte`] and [`RLEIter::byte`] return the next byte from the stream.
+/// * [`ByteCodeIter::byte`] and [`RLEIter::byte`] return the next byte.
 /// * [`ByteCodeIter::from_rle`] converts `RLEIter` to [`ByteCodeIter`].
 /// * [`RLEIter::from_byte_code`] converts [`ByteCodeIter`] to `RLEIter`.
 ///
@@ -881,30 +892,30 @@ impl AsRef<[u8]> for RLE {
 /// let mut source = RLE::new(4);
 /// source.write(3, 12); source.write(2, 721); source.write(0, 34);
 ///
-/// let mut iter = RLEIter::new(source.as_ref().iter(), 4);
+/// let mut iter = RLEIter::new(source.as_ref(), 4);
 /// assert_eq!(iter.next(), Some((3, 12)));
 /// assert_eq!(iter.next(), Some((2, 721)));
 /// assert_eq!(iter.next(), Some((0, 34)));
 /// assert_eq!(iter.next(), None);
 /// ```
 #[derive(Clone, Debug)]
-pub struct RLEIter<'a, T: Iterator<Item = &'a u8>> {
-    source: ByteCodeIter<'a, T>,
+pub struct RLEIter<'a> {
+    source: ByteCodeIter<'a>,
     sigma: usize,
     threshold: usize,
 }
 
-impl<'a, T: Iterator<Item = &'a u8>> RLEIter<'a, T> {
+impl<'a> RLEIter<'a> {
     /// Creates a new iterator.
     ///
     /// # Arguments
     ///
-    /// * `source`: Iterator over the byte stream.
+    /// * `bytes`: Byte slice.
     /// * `sigma`: Alphabet size.
-    pub fn new(source: T, sigma: usize) -> Self {
+    pub fn new(bytes: &'a [u8], sigma: usize) -> Self {
         let (sigma, threshold) = RLE::sanitize(sigma);
         RLEIter {
-            source: ByteCodeIter::from(source),
+            source: ByteCodeIter::new(bytes),
             sigma: sigma,
             threshold: threshold,
         }
@@ -916,7 +927,7 @@ impl<'a, T: Iterator<Item = &'a u8>> RLEIter<'a, T> {
     ///
     /// * `byte_code`: Byte code iterator.
     /// * `sigma`: Alphabet size.
-    pub fn from_byte_code(byte_code: ByteCodeIter<'a, T>, sigma: usize) -> Self {
+    pub fn from_byte_code(byte_code: ByteCodeIter<'a>, sigma: usize) -> Self {
         let (sigma, threshold) = RLE::sanitize(sigma);
         RLEIter {
             source: byte_code,
@@ -925,35 +936,25 @@ impl<'a, T: Iterator<Item = &'a u8>> RLEIter<'a, T> {
         }
     }
 
-    /// Returns the next byte from the byte stream.
-    pub fn byte(&mut self) -> Option<&u8> {
+    /// Returns the next byte from the slice.
+    pub fn byte(&mut self) -> Option<u8> {
         self.source.byte()
     }
 
+    /// Returns the first unvisited offset in the byte slice.
+    #[inline]
+    pub fn offset(&self) -> usize {
+        self.source.offset()
+    }
+
     /// Returns the alphabet size.
+    #[inline]
     pub fn sigma(&self) -> usize {
         self.sigma
     }
 }
 
-impl<'a> RLEIter<'a, SliceIter<'a, u8>> {
-    /// Creates a new iterator from a byte slice.
-    ///
-    /// # Arguments
-    ///
-    /// * `bytes`: Byte slice.
-    /// * `sigma`: Alphabet size.
-    pub fn from_bytes(bytes: &'a [u8], sigma: usize) -> Self {
-        let (sigma, threshold) = RLE::sanitize(sigma);
-        RLEIter {
-            source: ByteCodeIter::from_bytes(bytes),
-            sigma: sigma,
-            threshold: threshold,
-        }
-    }
-}
-
-impl<'a, T: Iterator<Item = &'a u8>> Iterator for RLEIter<'a, T> {
+impl<'a> Iterator for RLEIter<'a> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -963,8 +964,8 @@ impl<'a, T: Iterator<Item = &'a u8>> Iterator for RLEIter<'a, T> {
             if let Some(len) = self.source.next() { run.1 = len + 1; } else { return None; }
         } else {
             if let Some(byte) = self.source.byte() {
-                run.0 = (*byte as usize) % self.sigma;
-                run.1 = (*byte as usize) / self.sigma + 1;
+                run.0 = (byte as usize) % self.sigma;
+                run.1 = (byte as usize) / self.sigma + 1;
             } else {
                 return None;
             }
@@ -975,5 +976,7 @@ impl<'a, T: Iterator<Item = &'a u8>> Iterator for RLEIter<'a, T> {
         return Some(run);
     }
 }
+
+impl<'a> FusedIterator for RLEIter<'a> {}
 
 //-----------------------------------------------------------------------------

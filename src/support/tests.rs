@@ -239,12 +239,16 @@ fn random_byte_code() {
     assert!(encoder.len() >= values.len(), "The encoding is shorter than the number of values");
     assert!(!encoder.is_empty(), "The encoding is empty");
 
-    let iter = ByteCodeIter::from_bytes(encoder.as_ref());
-    let decoded: Vec<usize> = iter.collect();
-    assert_eq!(decoded.len(), values.len(), "Invalid number of decoded values");
-    for i in 0..decoded.len() {
-        assert_eq!(decoded[i], values[i], "Invalid decoded value {}", i);
+    let mut iter = ByteCodeIter::new(encoder.as_ref());
+    assert_eq!(iter.offset(), 0, "Newly creater iterator is not at offset 0");
+    let mut i = 0;
+    while let Some(value) = iter.next() {
+        assert!(i < values.len(), "Too many values from the iterator");
+        assert_eq!(value, values[i], "Invalid value {}", i);
+        i += 1;
     }
+    assert_eq!(i, values.len(), "Too few values from the iterator");
+    assert_eq!(iter.offset(), encoder.len(), "Iterator did not consume all bytes");
 }
 
 //-----------------------------------------------------------------------------
@@ -274,12 +278,16 @@ fn encode_runs(encoder: &mut RLE, runs: &[(usize, usize)], name: &str) {
 }
 
 fn check_runs(encoder: &RLE, truth: &[(usize, usize)], name: &str) {
-    let iter = RLEIter::from_bytes(encoder.as_ref(), encoder.sigma());
-    let decoded: Vec<(usize, usize)> = iter.collect();
-    assert_eq!(decoded.len(), truth.len(), "[{}]: Invalid number of decoded runs", name);
-    for i in 0..decoded.len() {
-        assert_eq!(decoded[i], truth[i], "[{}]: Invalid decoded run {}", name, i);
+    let mut iter = RLEIter::new(encoder.as_ref(), encoder.sigma());
+    assert_eq!(iter.offset(), 0, "[{}]: Newly creater iterator is not at offset 0", name);
+    let mut i = 0;
+    while let Some(run) = iter.next() {
+        assert!(i < truth.len(), "[{}]: Too many runs from the iterator", name);
+        assert_eq!(run, truth[i], "[{}]: Invalid run {}", name, i);
+        i += 1;
     }
+    assert_eq!(i, truth.len(), "[{}]: Too few runs from the iterator", name);
+    assert_eq!(iter.offset(), encoder.len(), "[{}]: Iterator did not consume all bytes", name);
 }
 
 fn test_rle(n: usize, sigma: usize, name: &str) {
@@ -349,7 +357,8 @@ fn gbwt_record() {
     }
 
     // Decompress the record.
-    let mut iter = ByteCodeIter::from_bytes(encoder.as_ref());
+    let mut iter = ByteCodeIter::new(encoder.as_ref());
+    assert_eq!(iter.offset(), 0, "Newly created iterator is not at offset 0");
     assert_eq!(iter.next(), Some(sigma), "Invalid alphabet size in the record");
     let mut prev = 0;
     for i in 0..sigma {
@@ -358,12 +367,16 @@ fn gbwt_record() {
         prev = node;
         assert_eq!(iter.next(), Some(edges[i].1), "Invalid record offset for edge {}", i);
     }
-    let iter = RLEIter::from_byte_code(iter, sigma);
-    let decoded: Vec<(usize, usize)> = iter.collect();
+    let mut iter = RLEIter::from_byte_code(iter, sigma);
+    let mut decoded: Vec<(usize, usize)> = Vec::new();
+    while let Some(run) = iter.next() {
+        decoded.push(run);
+    }
     assert_eq!(decoded.len(), runs.len(), "Invalid number of runs");
     for i in 0..decoded.len() {
         assert_eq!(decoded[i], runs[i], "Invalid run {}", i);
     }
+    assert_eq!(iter.offset(), encoder.len(), "Iterator did not consume all bytes");
 }
 
 //-----------------------------------------------------------------------------
