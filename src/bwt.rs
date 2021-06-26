@@ -40,9 +40,11 @@ use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
 use std::io;
 
+#[cfg(test)]
+mod tests;
+
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// The BWT encoded as a vector of bytes.
 ///
 /// The encoding consists of `self.len()` concatenated node records.
@@ -75,12 +77,11 @@ impl BWT {
         }
         let mut iter = self.index.select_iter(i);
         let (_, start) = iter.next().unwrap();
-        let limit = if i + 1 >= self.len() { iter.next().unwrap().1 } else { self.data.len() };
+        let limit = if i + 1 < self.len() { iter.next().unwrap().1 } else { self.data.len() };
         Record::new(&self.data[start..limit])
     }
 }
 
-// FIXME test
 impl Serialize for BWT {
     fn serialize_header<T: io::Write>(&self, _: &mut T) -> io::Result<()> {
         Ok(())
@@ -124,7 +125,6 @@ impl From<BWTBuilder> for BWT {
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// A structure for building the BWT by appending node records.
 ///
 /// This is mostly inteded for testing at the moment, as no BWT construction algorithms have been implemented.
@@ -178,7 +178,6 @@ impl BWTBuilder {
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// A partially decompressed node record.
 ///
 /// See module-level documentation for an example.
