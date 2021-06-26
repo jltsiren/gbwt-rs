@@ -1,17 +1,54 @@
 //! The BWT stored as an array of compressed node records.
+//!
+//! # Examples
+//!
+//! ```
+//! use gbwt::bwt::{BWT, BWTBuilder};
+//!
+//! // Encode the GBWT example from the paper.
+//! let mut builder = BWTBuilder::new();
+//! builder.append(&[(1, 0)], &[(0, 3)]);
+//! builder.append(&[(2, 0), (3, 0)], &[(0, 2), (1, 1)]);
+//! builder.append(&[(4, 0), (5, 0)], &[(0, 1), (1, 1)]);
+//! builder.append(&[(4, 1)], &[(0, 1)]);
+//! builder.append(&[(5, 1), (6, 0)], &[(1, 1), (0, 1)]);
+//! builder.append(&[(7, 0)], &[(0, 2)]);
+//! builder.append(&[(7, 2)], &[(0, 1)]);
+//! builder.append(&[(0, 0)], &[(0, 3)]);
+//!
+//! let bwt = BWT::from(builder);
+//! assert_eq!(bwt.len(), 8);
+//!
+//! let node_2 = bwt.record(2).unwrap();
+//! assert_eq!(node_2.outdegree(), 2);
+//! assert_eq!(node_2.successor(1), 5);
+//! assert_eq!(node_2.offset(1), 0);
+//!
+//! let node_6 = bwt.record(6).unwrap();
+//! assert_eq!(node_6.outdegree(), 1);
+//! assert_eq!(node_6.successor(0), 7);
+//! assert_eq!(node_6.offset(0), 2);
+//! ```
 
-use crate::support::ByteCodeIter;
+use crate::support::{ByteCodeIter, RLE};
 
-use simple_sds::sparse_vector::SparseVector;
+use simple_sds::sparse_vector::{SparseVector, SparseBuilder};
 use simple_sds::ops::{BitVec, Select};
 use simple_sds::serialize::Serialize;
 
+use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
 use std::io;
 
 //-----------------------------------------------------------------------------
 
-// FIXME document, example, tests
+// FIXME tests
+/// The BWT encoded as a vector of bytes.
+///
+/// The encoding consists of `self.len()` concatenated node records.
+/// Record identifiers are characters in the effective alphabet `0..self.len()`, but they are not necessarily the same as the node identifiers.
+/// There may be empty records that do not correspond to any node in the graph.
+/// See module-level documentation for an example.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BWT {
     index: SparseVector,
@@ -31,7 +68,7 @@ impl BWT {
         self.len() == 0
     }
 
-    /// Returns the `i`th record or `None` if there is no such node.
+    /// Returns the `i`th record, or `None` if there is no such node.
     pub fn record(&self, i: usize) -> Option<Record> {
         if i >= self.len() {
             return None;
@@ -43,6 +80,7 @@ impl BWT {
     }
 }
 
+// FIXME test
 impl Serialize for BWT {
     fn serialize_header<T: io::Write>(&self, _: &mut T) -> io::Result<()> {
         Ok(())
@@ -71,9 +109,79 @@ impl Serialize for BWT {
     }
 }
 
+impl From<BWTBuilder> for BWT {
+    fn from(source: BWTBuilder) -> Self {
+        let mut builder = SparseBuilder::new(source.encoder.len(), source.offsets.len()).unwrap();
+        for offset in source.offsets.iter() {
+            unsafe { builder.set_unchecked(*offset); }
+        }
+        BWT {
+            index: SparseVector::try_from(builder).unwrap(),
+            data: Vec::<u8>::from(source.encoder),
+        }
+    }
+}
+
 //-----------------------------------------------------------------------------
 
-// FIXME document, example, tests
+// FIXME tests
+/// A structure for building the BWT by appending node records.
+///
+/// This is mostly inteded for testing at the moment, as no BWT construction algorithms have been implemented.
+/// See module-level documentation for an example.
+#[derive(Clone, Debug)]
+pub struct BWTBuilder {
+    offsets: Vec<usize>,
+    encoder: RLE,
+}
+
+impl BWTBuilder {
+    /// Creates a new builder.
+    pub fn new() -> Self {
+        BWTBuilder {
+            offsets: Vec::new(),
+            encoder: RLE::new(),
+        }
+    }
+
+    /// Returns the number of records.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.offsets.len()
+    }
+
+    /// Returns true if the builder is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Appends a new record to the BWT.
+    ///
+    /// The record consists of a list of edges and a list of runs.
+    /// Each edge is a pair (node id, BWT offset), where node id is not necessarily the same as record id.
+    /// Each run is a pair `(c, len)`, with `c < edges.len()` and `len > 0`.
+    pub fn append(&mut self, edges: &[(usize, usize)], runs: &[(usize, usize)]) {
+        self.offsets.push(self.encoder.len());
+        self.encoder.write_int(edges.len());
+        let mut prev = 0;
+        for (node, offset) in edges {
+            self.encoder.write_int(*node - prev); self.encoder.write_int(*offset);
+            prev = *node;
+        }
+        self.encoder.set_sigma(edges.len());
+        for (c, len) in runs {
+            self.encoder.write(*c, *len);
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+// FIXME tests
+/// A partially decompressed node record.
+///
+/// See module-level documentation for an example.
 #[derive(Clone, Debug)]
 pub struct Record<'a> {
     edges: Vec<(usize, usize)>,
@@ -81,12 +189,6 @@ pub struct Record<'a> {
 }
 
 impl<'a> Record<'a> {
-    /// Returns the outdegree of the node.
-    #[inline]
-    pub fn outdegree(&self) -> usize {
-        self.edges.len()
-    }
-
     /// Returns a record corresponding to the byte slice, or `None` if the record would be empty.
     pub fn new(bytes: &'a [u8]) -> Option<Self> {
         if bytes.is_empty() {
@@ -115,6 +217,31 @@ impl<'a> Record<'a> {
             bwt: &bytes[iter.offset()..],
         })
     }
-}
+
+    /// Returns the outdegree of the node.
+    #[inline]
+    pub fn outdegree(&self) -> usize {
+        self.edges.len()
+    }
+
+    /// Returns the successor node of rank `i`.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `i >= self.outdegree()`.
+    #[inline]
+    pub fn successor(&self, i: usize) -> usize {
+        self.edges[i].0
+    }
+
+    /// Returns the BWT offset in the node of rank `i`.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `i >= self.outdegree()`.
+    #[inline]
+    pub fn offset(&self, i: usize) -> usize {
+        self.edges[i].1
+    }}
 
 //-----------------------------------------------------------------------------

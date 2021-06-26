@@ -270,7 +270,7 @@ fn generate_runs(n: usize, sigma: usize, w: usize) -> Vec<(usize, usize)> {
 fn encode_runs(encoder: &mut RLE, runs: &[(usize, usize)], name: &str) {
     assert_eq!(encoder.len(), 0, "[{}]: Newly created encoder contains runs", name);
     assert!(encoder.is_empty(), "[{}]: Newly created encoder is not empty", name);
-    for (c, len) in runs.iter() {
+    for (c, len) in runs {
         encoder.write(*c, *len);
     }
     assert!(encoder.len() >= runs.len(), "[{}]: The encoding is shorter than the number of runs", name);
@@ -278,7 +278,7 @@ fn encode_runs(encoder: &mut RLE, runs: &[(usize, usize)], name: &str) {
 }
 
 fn check_runs(encoder: &RLE, truth: &[(usize, usize)], name: &str) {
-    let mut iter = RLEIter::new(encoder.as_ref(), encoder.sigma());
+    let mut iter = RLEIter::with_sigma(encoder.as_ref(), encoder.sigma());
     assert_eq!(iter.offset(), 0, "[{}]: Newly creater iterator is not at offset 0", name);
     let mut i = 0;
     while let Some(run) = iter.next() {
@@ -292,7 +292,7 @@ fn check_runs(encoder: &RLE, truth: &[(usize, usize)], name: &str) {
 
 fn test_rle(n: usize, sigma: usize, name: &str) {
     let runs = generate_runs(n, sigma, 4);
-    let mut encoder = RLE::new(sigma);
+    let mut encoder = RLE::with_sigma(sigma);
     encode_runs(&mut encoder, &runs, name);
     check_runs(&encoder, &runs, name);
 }
@@ -306,7 +306,7 @@ fn add_run(encoder: &mut RLE, truth: &mut Vec<(usize, usize)>, len: usize, bytes
 
 fn test_threshold(sigma: usize, name: &str) {
     let (sigma, threshold) = RLE::sanitize(sigma);
-    let mut encoder = RLE::new(sigma);
+    let mut encoder = RLE::with_sigma(sigma);
     let mut truth: Vec<(usize, usize)> = Vec::new();
     if threshold > 1 {
         add_run(&mut encoder, &mut truth, threshold - 1, 1, name);
@@ -344,30 +344,31 @@ fn gbwt_record() {
     let runs = generate_runs(8, sigma, 4);
 
     // Encode the record.
-    let mut encoder = ByteCode::new();
-    encoder.write(sigma);
+    let mut encoder = RLE::new();
+    encoder.write_int(sigma);
     let mut prev = 0;
     for (node, offset) in edges.iter() {
-        encoder.write(*node - prev); encoder.write(*offset);
+        encoder.write_int(*node - prev); encoder.write_int(*offset);
         prev = *node;
     }
-    let mut encoder = RLE::from_byte_code(encoder, sigma);
+    encoder.set_sigma(sigma);
     for (c, len) in runs.iter() {
         encoder.write(*c, *len);
     }
 
-    // Decompress the record.
-    let mut iter = ByteCodeIter::new(encoder.as_ref());
-    assert_eq!(iter.offset(), 0, "Newly created iterator is not at offset 0");
-    assert_eq!(iter.next(), Some(sigma), "Invalid alphabet size in the record");
+    // Decompress the edges.
+    let mut iter = RLEIter::new(encoder.as_ref());
+    assert_eq!(iter.int(), Some(sigma), "Invalid alphabet size in the record");
     let mut prev = 0;
     for i in 0..sigma {
-        let node = iter.next().unwrap() + prev;
+        let node = iter.int().unwrap() + prev;
         assert_eq!(node, edges[i].0, "Invalid successor node {}", i);
         prev = node;
-        assert_eq!(iter.next(), Some(edges[i].1), "Invalid record offset for edge {}", i);
+        assert_eq!(iter.int(), Some(edges[i].1), "Invalid record offset for edge {}", i);
     }
-    let mut iter = RLEIter::from_byte_code(iter, sigma);
+
+    // Decompress the runs.
+    iter.set_sigma(sigma);
     let mut decoded: Vec<(usize, usize)> = Vec::new();
     while let Some(run) = iter.next() {
         decoded.push(run);
