@@ -23,21 +23,22 @@
 //! assert_eq!(node_2.outdegree(), 2);
 //! assert_eq!(node_2.successor(1), 5);
 //! assert_eq!(node_2.offset(1), 0);
-//!
-//! let node_6 = bwt.record(6).unwrap();
-//! assert_eq!(node_6.outdegree(), 1);
-//! assert_eq!(node_6.successor(0), 7);
-//! assert_eq!(node_6.offset(0), 2);
+//! assert_eq!(node_2.len(), 2);
+//! assert_eq!(node_2.lf(1), Some((5, 0)));
+//! assert_eq!(node_2.follow(0..2, 5), Some(0..1));
 //! ```
 
-use crate::support::{ByteCodeIter, RLE};
+use crate::support::{ByteCodeIter, RLE, RLEIter};
+use crate::ENDMARKER;
 
 use simple_sds::sparse_vector::{SparseVector, SparseBuilder};
 use simple_sds::ops::{BitVec, Select};
 use simple_sds::serialize::Serialize;
 
+use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
+use std::ops::Range;
 use std::io;
 
 #[cfg(test)]
@@ -160,7 +161,7 @@ impl BWTBuilder {
     ///
     /// The record consists of a list of edges and a list of runs.
     /// Each edge is a pair (node id, BWT offset), where node id is not necessarily the same as record id.
-    /// Each run is a pair `(c, len)`, with `c < edges.len()` and `len > 0`.
+    /// Each run is a pair `(rank, len)`, with `rank < edges.len()` and `len > 0`.
     pub fn append(&mut self, edges: &[(usize, usize)], runs: &[(usize, usize)]) {
         self.offsets.push(self.encoder.len());
         self.encoder.write_int(edges.len());
@@ -170,8 +171,8 @@ impl BWTBuilder {
             prev = *node;
         }
         self.encoder.set_sigma(edges.len());
-        for (c, len) in runs {
-            self.encoder.write(*c, *len);
+        for (rank, len) in runs {
+            self.encoder.write(*rank, *len);
         }
     }
 }
@@ -241,6 +242,93 @@ impl<'a> Record<'a> {
     #[inline]
     pub fn offset(&self, i: usize) -> usize {
         self.edges[i].1
-    }}
+    }
+
+    /// Returns the length of the offset range.
+    ///
+    /// This is somewhat slow, as it requires iterating over the run-lenght encoded BWT slice.
+    /// Note that the length is always non-zero.
+    pub fn len(&self) -> usize {
+        let mut result = 0;
+        for (_, len) in RLEIter::with_sigma(self.bwt, self.edges.len()) {
+            result += len;
+        }
+        result
+    }
+
+    /// Follows the path at offset `i` and returns (successor node, offset in successor).
+    ///
+    /// Returns [`None`] if the path ends or offset `i` does not exist.
+    pub fn lf(&self, i: usize) -> Option<(usize, usize)> {
+        let mut edges = self.edges.clone();
+        let mut offset = 0;
+        for (rank, len) in RLEIter::with_sigma(self.bwt, self.edges.len()) {
+            if offset + len > i {
+                if self.successor(rank) == ENDMARKER {
+                    return None;
+                } else {
+                    edges[rank].1 += i - offset;
+                    return Some(edges[rank]);
+                }
+            }
+            edges[rank].1 += len;
+            offset += len;
+        }
+        None
+    }
+
+    // Returns the rank of the edge to the given node.
+    fn edge_to(&self, node: usize) -> Option<usize> {
+        let mut low = 0;
+        let mut high = self.outdegree();
+        while low < high {
+            let mid = low + (high - low) / 2;
+            match node.cmp(&self.edges[mid].0) {
+                Ordering::Less => high = mid,
+                Ordering::Equal => return Some(mid),
+                Ordering::Greater => low = mid + 1,
+            }
+        }
+        None
+    }
+
+    /// Follows all paths in the offset range to the given node.
+    ///
+    /// Returns a semiopen offset range in the destination node, or [`None`] if no such paths exist.
+    ///
+    /// # Arguments
+    ///
+    /// * `range`: Offset range in the record.
+    /// * `node`: Destination node.
+    pub fn follow(&self, range: Range<usize>, node: usize) -> Option<Range<usize>> {
+        if range.is_empty() || node == ENDMARKER {
+            return None;
+        }
+        let rank = self.edge_to(node);
+        if rank == None {
+            return None;
+        }
+        let rank = rank.unwrap();
+
+        let mut result = self.offset(rank)..self.offset(rank);
+        let mut offset = 0;
+        for (c, len) in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
+            if offset < range.end {
+                if c == rank {
+                    if offset < range.start {
+                        result.start += if offset + len > range.start { range.start - offset } else { len };
+                    }
+                    result.end += if offset + len > range.end { range.end - offset } else { len };
+                }
+            }
+            offset += len;
+            if offset >= range.end {
+                break;
+            }
+        }
+
+        if result.is_empty() { None } else { Some(result) }
+    }
+}
 
 //-----------------------------------------------------------------------------

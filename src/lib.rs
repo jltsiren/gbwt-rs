@@ -21,3 +21,10 @@ pub mod support;
 
 // mod gbwt: GBWT
 // mod gbz: GBZ
+
+//-----------------------------------------------------------------------------
+
+/// Node identifier `0` is used for technical purposes and does not exist in the graph.
+pub const ENDMARKER: usize = 0;
+
+//-----------------------------------------------------------------------------

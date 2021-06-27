@@ -846,7 +846,7 @@ impl RLE {
     // Writes a single-byte run.
     fn write_basic(&mut self, value: usize, len: usize) {
         let code = value + self.sigma * (len - 1);
-        self.bytes.bytes.push(code as u8);
+        self.bytes.write_byte(code as u8);
     }
 
     // Returns (effective sigma, threshold for short runs).
