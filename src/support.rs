@@ -598,7 +598,7 @@ impl From<ByteCode> for Vec<u8> {
 /// let bytes = encoder.as_ref();
 /// assert_eq!(*bytes, [123, 72 + 128, 3, 21 + 128, 6]);
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ByteCode {
     bytes: Vec<u8>
 }
@@ -610,9 +610,7 @@ impl ByteCode {
 
     /// Creates a new encoder.
     pub fn new() -> Self {
-        ByteCode {
-            bytes: Vec::new(),
-        }
+        ByteCode::default()
     }
 
     /// Encodes `value` and stores the encoding.
@@ -758,12 +756,7 @@ impl RLE {
 
     /// Creates a new encoder with alphabet size `0`.
     pub fn new() -> Self {
-        let (sigma, threshold) = Self::sanitize(0);
-        RLE {
-            bytes: ByteCode::new(),
-            sigma: sigma,
-            threshold: threshold,
-        }
+        RLE::default()
     }
 
     /// Creates a new encoder with the given alphabet size.
@@ -854,6 +847,17 @@ impl RLE {
         let sigma = if sigma == 0 { usize::MAX } else { sigma };
         let threshold = if sigma < Self::THRESHOLD { Self::UNIVERSE / sigma } else { 0 };
         (sigma, threshold)
+    }
+}
+
+impl Default for RLE {
+    fn default() -> Self {
+        let (sigma, threshold) = Self::sanitize(0);
+        RLE {
+            bytes: ByteCode::new(),
+            sigma: sigma,
+            threshold: threshold,
+        }
     }
 }
 

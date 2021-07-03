@@ -130,7 +130,7 @@ impl From<BWTBuilder> for BWT {
 ///
 /// This is mostly inteded for testing at the moment, as no BWT construction algorithms have been implemented.
 /// See module-level documentation for an example.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct BWTBuilder {
     offsets: Vec<usize>,
     encoder: RLE,
@@ -139,10 +139,7 @@ pub struct BWTBuilder {
 impl BWTBuilder {
     /// Creates a new builder.
     pub fn new() -> Self {
-        BWTBuilder {
-            offsets: Vec::new(),
-            encoder: RLE::new(),
-        }
+        BWTBuilder::default()
     }
 
     /// Returns the number of records.
