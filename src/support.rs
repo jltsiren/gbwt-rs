@@ -20,6 +20,82 @@ mod tests;
 
 //-----------------------------------------------------------------------------
 
+/// Returns the GBWT node identifier corresponding to the given original node and orientation.
+///
+/// This encoding is used in bidirectional GBWT indexes.
+///
+/// # Arguments
+///
+/// * `id`: Identifier of the original node.
+/// * `is_reverse`: Is the original node in reverse orientation.
+///
+/// # Panics
+///
+/// May panic if `id > usize::MAX / 2`.
+pub fn encode_node(id: usize, is_reverse: bool) -> usize {
+    2 * id + (is_reverse as usize)
+}
+
+/// Returns the original node identifier corresponding to the given GBWT node.
+///
+/// This encoding is used in bidirectional GBWT indexes.
+pub fn node_id(id: usize) -> usize {
+    id / 2
+}
+
+/// Returns `true` if the given GBWT node corresponds to an original node in reverse orientation.
+///
+/// This encoding is used in bidirectional GBWT indexes.
+pub fn node_is_reverse(id: usize) -> bool {
+    id & 1 != 0
+}
+
+/// Returns the GBWT node identifier for the same original node in the other orientation.
+///
+/// This encoding is used in bidirectional GBWT indexes.
+pub fn flip_node(id: usize) -> usize {
+    id ^ 1
+}
+
+/// Returns the sequence identifier corresponding to the given path and orientation.
+///
+/// This encoding is used in bidirectional GBWT indexes.
+///
+/// # Arguments
+///
+/// * `id`: Identifier of the path.
+/// * `is_reverse`: Is the path in reverse orientation.
+///
+/// # Panics
+///
+/// May panic if `id > usize::MAX / 2`.
+pub fn encode_path(id: usize, is_reverse: bool) -> usize {
+    2 * id + (is_reverse as usize)
+}
+
+/// Returns the path identifier corresponding to the given sequence.
+///
+/// This encoding is used in bidirectional GBWT indexes.
+pub fn path_id(id: usize) -> usize {
+    id / 2
+}
+
+/// Returns `true` if the given sequence corresponds to a path in reverse orientation.
+///
+/// This encoding is used in bidirectional GBWT indexes.
+pub fn path_is_reverse(id: usize) -> bool {
+    id & 1 != 0
+}
+
+/// Returns the sequence identifier for the same path in the other orientation.
+///
+/// This encoding is used in bidirectional GBWT indexes.
+pub fn flip_path(id: usize) -> usize {
+    id ^ 1
+}
+
+//-----------------------------------------------------------------------------
+
 /// An immutable array of immutable strings.
 ///
 /// The strings are concatenated and stored in a single byte vector.

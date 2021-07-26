@@ -253,9 +253,9 @@ impl<'a> Record<'a> {
         result
     }
 
-    /// Follows the path at offset `i` and returns (successor node, offset in successor).
+    /// Follows the sequence at offset `i` and returns (successor node, offset in successor).
     ///
-    /// Returns [`None`] if the path ends or offset `i` does not exist.
+    /// Returns [`None`] if the sequence ends or offset `i` does not exist.
     pub fn lf(&self, i: usize) -> Option<(usize, usize)> {
         let mut edges = self.edges.clone();
         let mut offset = 0;
@@ -289,9 +289,9 @@ impl<'a> Record<'a> {
         None
     }
 
-    /// Follows all paths in the offset range to the given node.
+    /// Follows all sequences in the offset range to the given node.
     ///
-    /// Returns a semiopen offset range in the destination node, or [`None`] if no such paths exist.
+    /// Returns a semiopen offset range in the destination node, or [`None`] if no such sequences exist.
     ///
     /// # Arguments
     ///

@@ -172,16 +172,28 @@ pub trait Payload: Copy + Eq + Default {
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct GBWTPayload {
-    sequences: usize,
-    size: usize,
-    offset: usize,
-    alphabet_size: usize,
+    /// Number of sequences in the GBWT.
+    pub sequences: usize,
+
+    /// Total length of the sequences, including the endmarkers.
+    pub size: usize,
+
+    /// Alphabet offset: node identifiers in `1..offset + 1` are not used.
+    pub offset: usize,
+
+    /// Alphabet size: all node identifiers are in `1..alphabet_size`.
+    pub alphabet_size: usize,
 }
 
 impl GBWTPayload {
-    const FLAG_BIDIRECTIONAL: u64 = 0x0001;
-    const FLAG_METADATA: u64      = 0x0002;
-    const FLAG_SIMPLE_SDS: u64    = 0x0004;
+    /// The GBWT index is bidirectional.
+    pub const FLAG_BIDIRECTIONAL: u64 = 0x0001;
+
+    /// The GBWT index contains metadata.
+    pub const FLAG_METADATA: u64      = 0x0002;
+
+    /// The serialized data is in the simple-sds format.
+    pub const FLAG_SIMPLE_SDS: u64    = 0x0004;
 }
 
 impl Payload for GBWTPayload {

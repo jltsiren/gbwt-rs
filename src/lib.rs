@@ -17,15 +17,23 @@
 //! * This implementation supports the Simple-SDS file formats for [GBWT](https://github.com/jltsiren/gbwt/SERIALIZATION.md) and [GBZ](https://github.com/jltsiren/gbwtgraph/SERIALIZATION.md).
 
 pub mod bwt;
+pub mod gbwt;
 pub mod headers;
 pub mod support;
 
-// mod gbwt: GBWT
+pub use crate::gbwt::GBWT;
+
 // mod gbz: GBZ
 
 //-----------------------------------------------------------------------------
 
 /// Node identifier `0` is used for technical purposes and does not exist in the graph.
 pub const ENDMARKER: usize = 0;
+
+/// Key of the source tag.
+pub const SOURCE_KEY: &str = "source";
+
+/// Value of the source tag.
+pub const SOURCE_VALUE: &str = "jltsiren/gbwt-rs";
 
 //-----------------------------------------------------------------------------
