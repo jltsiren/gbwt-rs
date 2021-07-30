@@ -4,6 +4,7 @@ use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
 use crate::bwt::BWT;
 use crate::headers::{Header, GBWTPayload};
 use crate::support::Tags;
+use crate::support;
 
 use simple_sds::serialize::Serialize;
 
@@ -115,12 +116,15 @@ impl GBWT {
         if pos.0 <= self.first_node() {
             return None;
         }
-        if let Some(record) = self.bwt.record(pos.0 - self.alphabet_offset()) {
-            // FIXME count the number of occurrences of each successor of the reverse node
-            // FIXME this allows us to find the predecessor of the current node
-            // FIXME note the special case if the right successor is (v, forward) but there are also edges to (v, reverse)
-            // FIXME because orientation flipping changes the order
-            // FIXME then go to the predecessor and determine which position goes to the given offset
+        let reverse_id = support::flip_node(pos.0 - self.alphabet_offset());
+        if let Some(record) = self.bwt.record(reverse_id) {
+            if let Some(predecessor) = record.predecessor_at(pos.1) {
+                if let Some(pred_record) = self.bwt.record(predecessor) {
+                    if let Some(offset) = pred_record.offset_to(pos) {
+                        return Some((predecessor, offset));
+                    }
+                }
+            }
         }
         None
     }

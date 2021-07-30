@@ -44,8 +44,9 @@ fn create_bwt(edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)>]) -> BW
     BWT::from(builder)
 }
 
-// Check all edges in the BWT, using the provided edges as the source of truth.
-fn check_edges(bwt: &BWT, edges: &[Vec<(usize, usize)>]) {
+// Check records in the BWT, using the provided edges as the source of truth.
+// Also checks that `id()` works correctly.
+fn check_records(bwt: &BWT, edges: &[Vec<(usize, usize)>]) {
     assert_eq!(bwt.len(), edges.len(), "Invalid number of records in the BWT");
     assert_eq!(bwt.is_empty(), edges.is_empty(), "Invalid BWT emptiness");
 
@@ -55,6 +56,7 @@ fn check_edges(bwt: &BWT, edges: &[Vec<(usize, usize)>]) {
         let curr_edges = &edges[i];
         assert_eq!(record.is_none(), curr_edges.is_empty(), "Invalid record {} existence", i);
         if let Some(record) = record {
+            assert_eq!(record.id(), i, "Invalid id for record {}", i);
             assert_eq!(record.outdegree(), curr_edges.len(), "Invalid outdegree in record {}", i);
             for j in 0..record.outdegree() {
                 assert_eq!(record.successor(j), curr_edges[j].0, "Invalid successor {} in record {}", j, i);
@@ -64,7 +66,23 @@ fn check_edges(bwt: &BWT, edges: &[Vec<(usize, usize)>]) {
     }
 }
 
+// Check that the iterator finds the correct records.
+fn check_iter(bwt: &BWT) {
+    let mut iter = bwt.iter();
+    for i in 0..bwt.len() {
+        if let Some(truth) = bwt.record(i) {
+            if let Some(record) = iter.next() {
+                assert_eq!(record.id(), truth.id(), "Invalid record id from the iterator");
+            } else {
+                panic!("Iterator did not find record {}", i);
+            }
+        }
+    }
+    assert!(iter.next().is_none(), "Iterator found a record past the end");
+}
+
 // Check all `lf()` results in the BWT, using the provided edges and runs as the source of truth.
+// Also checks that `offset_to()` works in positive cases and that `len()` is correct.
 fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)>]) {
     // `lf()` at each offset of each record.
     for i in 0..bwt.len() {
@@ -74,8 +92,11 @@ fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)
             let curr_runs = &runs[i];
             for (rank, len) in curr_runs {
                 for _ in 0..*len {
-                    let expected = if curr_edges[*rank].0 == ENDMARKER { None } else { Some(curr_edges[*rank]) };
+                    let edge = curr_edges[*rank];
+                    let expected = if edge.0 == ENDMARKER { None } else { Some(edge) };
                     assert_eq!(record.lf(offset), expected, "Invalid lf({}) in record {}", offset, i);
+                    let expected = if edge.0 == ENDMARKER { None } else { Some(offset) };
+                    assert_eq!(record.offset_to(edge), expected, "Invalid offset_to(({}, {})) in record {}", edge.0, edge.1, i);
                     offset += 1;
                     curr_edges[*rank].1 += 1;
                 }
@@ -88,44 +109,63 @@ fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)
 
 // Check all `follow()` results in the BWT, using `lf()` as the source of truth.
 fn check_follow(bwt: &BWT) {
-    for i in 0..bwt.len() {
-        if let Some(record) = bwt.record(i) {
-            // Check all ranges, including empty and past-the-end ones.
-            let len = record.len();
-            for start in 0..len + 1 {
-                for limit in start..len + 1 {
-                    // With an endmarker.
-                    assert_eq!(record.follow(start..limit, ENDMARKER), None, "Got a follow({}..{}, endmarker) result in record {}", start, limit, i);
+    for record in bwt.iter() {
+        let i = record.id();
+        // Check all ranges, including empty and past-the-end ones.
+        let len = record.len();
+        for start in 0..len + 1 {
+            for limit in start..len + 1 {
+                // With an endmarker.
+                assert_eq!(record.follow(start..limit, ENDMARKER), None, "Got a follow({}..{}, endmarker) result in record {}", start, limit, i);
 
-                    // With each successor node.
-                    for rank in 0..record.outdegree() {
-                        let successor = record.successor(rank);
-                        if successor == ENDMARKER {
-                            continue;
-                        }
-                        if let Some(result) = record.follow(start..limit, successor) {
-                            let mut found = result.start..result.start;
-                            for j in start..limit {
-                                if let Some((node, offset)) = record.lf(j) {
-                                    if node == successor && offset == found.end {
-                                        found.end += 1;
-                                    }
+                // With each successor node.
+                for rank in 0..record.outdegree() {
+                    let successor = record.successor(rank);
+                    if successor == ENDMARKER {
+                        continue;
+                    }
+                    if let Some(result) = record.follow(start..limit, successor) {
+                        let mut found = result.start..result.start;
+                        for j in start..limit {
+                            if let Some((node, offset)) = record.lf(j) {
+                                if node == successor && offset == found.end {
+                                    found.end += 1;
                                 }
                             }
-                            assert_eq!(result, found, "follow({}..{}, {}) did not find the correct range in record {}", start, limit, successor, i);
-                        } else {
-                            for j in start..limit {
-                                if let Some((node, _)) = record.lf(j) {
-                                    assert_ne!(node, successor, "follow({}..{}, {}) did not follow offset {} in record {}", start, limit, successor, j, i);
-                                }
+                        }
+                        assert_eq!(result, found, "follow({}..{}, {}) did not find the correct range in record {}", start, limit, successor, i);
+                    } else {
+                        for j in start..limit {
+                            if let Some((node, _)) = record.lf(j) {
+                                assert_ne!(node, successor, "follow({}..{}, {}) did not follow offset {} in record {}", start, limit, successor, j, i);
                             }
                         }
                     }
-
-                    // With an invalid node.
-                    assert_eq!(record.follow(start..limit, 8), None, "Got a follow({}..{}, invalid) result in record {}", start, limit, i);
                 }
+
+                // With an invalid node.
+                assert_eq!(record.follow(start..limit, 8), None, "Got a follow({}..{}, invalid) result in record {}", start, limit, i);
             }
+        }
+    }
+}
+
+// Check negative cases for `offset_to()`.
+fn negative_offset_to(bwt: &BWT) {
+    for record in bwt.iter() {
+        assert_eq!(record.offset_to((ENDMARKER, 0)), None, "Got an offset to the endmarker from record {}", record.id());
+        assert_eq!(record.offset_to((bwt.len(), 0)), None, "Got an offset to an invalid node from record {}", record.id());
+        for rank in 0..record.outdegree() {
+            let successor = record.successor(rank);
+            if successor == ENDMARKER {
+                continue;
+            }
+            let offset = record.offset(rank);
+            if offset > 0 {
+                assert_eq!(record.offset_to((successor, offset - 1)), None, "Got an offset from record {} to a too small position in {}", record.id(), successor);
+            }
+            let count = record.follow(0..record.len(), successor).unwrap().len();
+            assert_eq!(record.offset_to((successor, offset + count)), None, "Got an offset from record {} to a too large position in {}", record.id(), successor);
         }
     }
 }
@@ -137,9 +177,11 @@ fn empty_bwt() {
     let edges = Vec::new();
     let runs = Vec::new();
     let bwt = create_bwt(&edges, &runs);
-    check_edges(&bwt, &edges);
+    check_records(&bwt, &edges);
+    check_iter(&bwt);
     check_lf(&bwt, &edges, &runs);
     check_follow(&bwt);
+    negative_offset_to(&bwt);
     serialize::test(&bwt, "empty-bwt", None, true);
 }
 
@@ -148,9 +190,11 @@ fn non_empty_bwt() {
     let edges = get_edges();
     let runs = get_runs();
     let bwt = create_bwt(&edges, &runs);
-    check_edges(&bwt, &edges);
+    check_records(&bwt, &edges);
+    check_iter(&bwt);
     check_lf(&bwt, &edges, &runs);
     check_follow(&bwt);
+    negative_offset_to(&bwt);
     serialize::test(&bwt, "non-empty-bwt", None, true);
 }
 
@@ -165,9 +209,11 @@ fn empty_records() {
     runs[6] = Vec::new();
  
     let bwt = create_bwt(&edges, &runs);
-    check_edges(&bwt, &edges);
+    check_records(&bwt, &edges);
+    check_iter(&bwt);
     check_lf(&bwt, &edges, &runs);
     check_follow(&bwt);
+    negative_offset_to(&bwt);
     serialize::test(&bwt, "bwt-with-empty", None, true);
 }
 

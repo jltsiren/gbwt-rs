@@ -20,16 +20,22 @@
 //! assert_eq!(bwt.len(), 8);
 //!
 //! let node_2 = bwt.record(2).unwrap();
+//! assert_eq!(node_2.id(), 2);
 //! assert_eq!(node_2.outdegree(), 2);
 //! assert_eq!(node_2.successor(1), 5);
 //! assert_eq!(node_2.offset(1), 0);
 //! assert_eq!(node_2.len(), 2);
 //! assert_eq!(node_2.lf(1), Some((5, 0)));
 //! assert_eq!(node_2.follow(0..2, 5), Some(0..1));
+//!
+//! // Determine the length of the BWT by iterating over the records.
+//! let bwt_len = bwt.iter().fold(0, |len, record| len + record.len());
+//! assert_eq!(bwt_len, 17);
 //! ```
 
 use crate::support::{ByteCodeIter, RLE, RLEIter};
 use crate::ENDMARKER;
+use crate::support;
 
 use simple_sds::sparse_vector::{SparseVector, SparseBuilder};
 use simple_sds::ops::{BitVec, Select};
@@ -38,6 +44,7 @@ use simple_sds::serialize::Serialize;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
+use std::iter::{FusedIterator};
 use std::ops::Range;
 use std::io;
 
@@ -46,6 +53,7 @@ mod tests;
 
 //-----------------------------------------------------------------------------
 
+// TODO: Add iterator over records.
 /// The BWT encoded as a vector of bytes.
 ///
 /// The encoding consists of `self.len()` concatenated node records.
@@ -79,7 +87,17 @@ impl BWT {
         let mut iter = self.index.select_iter(i);
         let (_, start) = iter.next().unwrap();
         let limit = if i + 1 < self.len() { iter.next().unwrap().1 } else { self.data.len() };
-        Record::new(&self.data[start..limit])
+        Record::new(i, &self.data[start..limit])
+    }
+
+    /// Returns an iterator over the records in the BWT.
+    ///
+    /// Note that the iterator skips empty records.
+    pub fn iter(&self) -> RecordIter {
+        RecordIter {
+            parent: self,
+            next: 0,
+        }
     }
 }
 
@@ -176,18 +194,55 @@ impl BWTBuilder {
 
 //-----------------------------------------------------------------------------
 
+/// An iterator over the records in [`BWT`].
+///
+/// The type of `Item` is [`Record`].
+/// Note that the iterator skips empty records.
+/// See module-level documentation for an example.
+#[derive(Clone, Debug)]
+pub struct RecordIter<'a> {
+    parent: &'a BWT,
+    // The first index we have not visited.
+    next: usize,
+}
+
+impl<'a> Iterator for RecordIter<'a> {
+    type Item = Record<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.next < self.parent.len() {
+            let result = self.parent.record(self.next);
+            self.next += 1;
+            if result.is_some() {
+                return result;
+            }
+        }
+        None
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.parent.len() - self.next))
+    }
+}
+
+impl<'a> FusedIterator for RecordIter<'a> {}
+
+//-----------------------------------------------------------------------------
+
 /// A partially decompressed node record.
 ///
 /// See module-level documentation for an example.
 #[derive(Clone, Debug)]
 pub struct Record<'a> {
+    id: usize,
     edges: Vec<(usize, usize)>,
     bwt: &'a [u8],
 }
 
 impl<'a> Record<'a> {
     /// Returns a record corresponding to the byte slice, or `None` if the record would be empty.
-    pub fn new(bytes: &'a [u8]) -> Option<Self> {
+    pub fn new(id: usize, bytes: &'a [u8]) -> Option<Self> {
         if bytes.is_empty() {
             return None;
         }
@@ -210,9 +265,15 @@ impl<'a> Record<'a> {
         }
 
         Some(Record {
+            id: id,
             edges: edges,
             bwt: &bytes[iter.offset()..],
         })
+    }
+
+    /// Returns the identifier of the record.
+    pub fn id(&self) -> usize {
+        self.id
     }
 
     /// Returns the outdegree of the node.
@@ -274,6 +335,46 @@ impl<'a> Record<'a> {
         None
     }
 
+    // FIXME tests (this requires a bidirectional example)
+    /// Returns the predecessor node for the sequence at offset `i` in the other orientation of this node.
+    ///
+    /// This query assumes that the GBWT index is bidirectional.
+    /// Returns [`None`] if the predecessor or the offset does not exist.
+    pub fn predecessor_at(&self, i: usize) -> Option<usize> {
+        // Determine the number of sequences going to each successor node.
+        let mut edges: Vec<(usize, usize)> = Vec::with_capacity(self.edges.len());
+        for rank in 0..self.edges.len() {
+            edges.push((self.successor(rank), 0));
+        }
+        for (rank, len) in RLEIter::with_sigma(self.bwt, self.edges.len()) {
+            edges[rank].1 += len;
+        }
+
+        // Flip the successor nodes to make them the predecessors of the other orientation of this node.
+        for rank in 0..edges.len() {
+            edges[rank].0 = support::flip_node(edges[rank].0);
+        }
+
+        // Handle the special case where the predecessors are now in wrong order because they contain
+        // both orientations of the same node.
+        for rank in 1..edges.len() {
+            if support::node_id(edges[rank - 1].0) == support::node_id(edges[rank].0) {
+                edges.swap(rank - 1, rank);
+            }
+        }
+
+        // Find the predecessor, if it exists.
+        let mut offset = 0;
+        for (id, count) in edges {
+            offset += count;
+            if offset > i {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
     // Returns the rank of the edge to the given node.
     fn edge_to(&self, node: usize) -> Option<usize> {
         let mut low = 0;
@@ -286,6 +387,39 @@ impl<'a> Record<'a> {
                 Ordering::Greater => low = mid + 1,
             }
         }
+        None
+    }
+
+    /// Returns the offset for which [`Self::lf`] would return `pos`, or [`None`] if no such offset exists.
+    pub fn offset_to(&self, pos: (usize, usize)) -> Option<usize> {
+        if pos.0 == ENDMARKER {
+            return None;
+        }
+        let outrank = self.edge_to(pos.0);
+        if outrank == None {
+            return None;
+        }
+        let outrank = outrank.unwrap();
+
+        // Rank of `pos.0` so far.
+        let mut succ_rank = self.offset(outrank);
+        if succ_rank > pos.1 {
+            return None;
+        }
+
+        // Find the occurrence of `pos.0` of rank `pos.1 - succ_rank`.
+        let mut offset = 0;
+        for (c, len) in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
+            offset += len;
+            if c != outrank {
+                continue;
+            }
+            succ_rank += len;
+            if succ_rank > pos.1 {
+                return Some(offset - (succ_rank - pos.1));
+            }
+        }
+
         None
     }
 
