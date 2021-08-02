@@ -335,7 +335,6 @@ impl<'a> Record<'a> {
         None
     }
 
-    // FIXME tests (this requires a bidirectional example)
     /// Returns the predecessor node for the sequence at offset `i` in the other orientation of this node.
     ///
     /// This query assumes that the GBWT index is bidirectional.
