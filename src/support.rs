@@ -32,6 +32,7 @@ mod tests;
 /// # Panics
 ///
 /// May panic if `id > usize::MAX / 2`.
+#[inline]
 pub fn encode_node(id: usize, is_reverse: bool) -> usize {
     2 * id + (is_reverse as usize)
 }
@@ -39,6 +40,7 @@ pub fn encode_node(id: usize, is_reverse: bool) -> usize {
 /// Returns the original node identifier corresponding to the given GBWT node.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
+#[inline]
 pub fn node_id(id: usize) -> usize {
     id / 2
 }
@@ -46,6 +48,7 @@ pub fn node_id(id: usize) -> usize {
 /// Returns `true` if the given GBWT node corresponds to an original node in reverse orientation.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
+#[inline]
 pub fn node_is_reverse(id: usize) -> bool {
     id & 1 != 0
 }
@@ -53,6 +56,7 @@ pub fn node_is_reverse(id: usize) -> bool {
 /// Returns the GBWT node identifier for the same original node in the other orientation.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
+#[inline]
 pub fn flip_node(id: usize) -> usize {
     id ^ 1
 }
@@ -69,6 +73,7 @@ pub fn flip_node(id: usize) -> usize {
 /// # Panics
 ///
 /// May panic if `id > usize::MAX / 2`.
+#[inline]
 pub fn encode_path(id: usize, is_reverse: bool) -> usize {
     2 * id + (is_reverse as usize)
 }
@@ -76,6 +81,7 @@ pub fn encode_path(id: usize, is_reverse: bool) -> usize {
 /// Returns the path identifier corresponding to the given sequence.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
+#[inline]
 pub fn path_id(id: usize) -> usize {
     id / 2
 }
@@ -83,6 +89,7 @@ pub fn path_id(id: usize) -> usize {
 /// Returns `true` if the given sequence corresponds to a path in reverse orientation.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
+#[inline]
 pub fn path_is_reverse(id: usize) -> bool {
     id & 1 != 0
 }
@@ -90,6 +97,7 @@ pub fn path_is_reverse(id: usize) -> bool {
 /// Returns the sequence identifier for the same path in the other orientation.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
+#[inline]
 pub fn flip_path(id: usize) -> usize {
     id ^ 1
 }
