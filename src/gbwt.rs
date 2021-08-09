@@ -102,6 +102,7 @@ impl GBWT {
 
 // Sequence navigation.
 impl GBWT {
+    // FIXME we should cache the endmarker
     /// Returns the first position in sequence `sequence`, or [`None`] if no such sequence exists.
     ///
     /// The return value is a pair (node identifier, offset in node).

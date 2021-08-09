@@ -2,6 +2,8 @@ use super::*;
 
 use simple_sds::serialize;
 
+use std::collections::HashSet;
+
 //-----------------------------------------------------------------------------
 
 // GBWT example from the paper: (edges, runs, invalid_node)
@@ -224,6 +226,32 @@ fn negative_offset_to(bwt: &BWT, invalid_node: usize) {
     }
 }
 
+// Check that we can find predecessors for all positions except starting positions.
+// The tests for `GBWT::backward()` will make sure that the predecessors are correct.
+fn check_predecessor_at(bwt: &BWT) {
+    let mut starting_positions = HashSet::<(usize, usize)>::new();
+    let endmarker = bwt.record(ENDMARKER).unwrap();
+    for i in 0..endmarker.len() {
+        starting_positions.insert(endmarker.lf(i).unwrap());
+    }
+
+    for record in bwt.iter() {
+        if record.id() == ENDMARKER {
+            continue;
+        }
+        let reverse_id = ((record.id() + 1) ^ 1) - 1; // Record to node, flip, node to record.
+        let reverse_record = bwt.record(reverse_id).unwrap();
+        for i in 0..record.len() {
+            if starting_positions.contains(&(record.id() + 1, i)) {
+                assert!(reverse_record.predecessor_at(i).is_none(), "Found a predecessor for a starting position ({}, {})", record.id() + 1, i);
+            } else {
+                assert!(reverse_record.predecessor_at(i).is_some(), "Did not find a predecessor for position ({}, {})", record.id() + 1, i);
+            }
+        }
+        assert!(reverse_record.predecessor_at(record.len()).is_none(), "Found a predecessor for an invalid offset at node {}", record.id() + 1);
+    }
+}
+
 //-----------------------------------------------------------------------------
 
 #[test]
@@ -278,6 +306,7 @@ fn bidirectional_bwt() {
     check_lf(&bwt, &edges, &runs);
     check_follow(&bwt, invalid_node);
     negative_offset_to(&bwt, invalid_node);
+    check_predecessor_at(&bwt);
     serialize::test(&bwt, "bidirectional-bwt", None, true);
 }
 
