@@ -335,6 +335,7 @@ impl<'a> Record<'a> {
         None
     }
 
+    // FIXME tests: bidirectional case, for each position, for past-the-end
     /// Returns the predecessor node for the sequence at offset `i` in the other orientation of this node.
     ///
     /// This query assumes that the GBWT index is bidirectional.
@@ -351,7 +352,9 @@ impl<'a> Record<'a> {
 
         // Flip the successor nodes to make them the predecessors of the other orientation of this node.
         for rank in 0..edges.len() {
-            edges[rank].0 = support::flip_node(edges[rank].0);
+            if edges[rank].0 != ENDMARKER {
+                edges[rank].0 = support::flip_node(edges[rank].0);
+            }
         }
 
         // Handle the special case where the predecessors are now in wrong order because they contain
@@ -367,6 +370,9 @@ impl<'a> Record<'a> {
         for (id, count) in edges {
             offset += count;
             if offset > i {
+                if id == ENDMARKER {
+                    return None;
+                }
                 return Some(id);
             }
         }

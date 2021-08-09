@@ -12,6 +12,7 @@ use std::collections::btree_map::Iter as TagIter;
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
+use std::path::PathBuf;
 use std::str::Utf8Error;
 use std::{cmp, io};
 
@@ -100,6 +101,16 @@ pub fn path_is_reverse(id: usize) -> bool {
 #[inline]
 pub fn flip_path(id: usize) -> usize {
     id ^ 1
+}
+
+//-----------------------------------------------------------------------------
+
+/// Returns the full file name for a specific test file.
+pub fn get_test_data(filename: &'static str) -> PathBuf {
+    let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    buf.push("test-data");
+    buf.push(filename);
+    buf
 }
 
 //-----------------------------------------------------------------------------

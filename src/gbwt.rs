@@ -21,9 +21,11 @@ use simple_sds::serialize;
 use std::io::{Error, ErrorKind};
 use std::io;
 
+#[cfg(test)]
+mod tests;
+
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// The GBWT index storing a collection of paths space-efficiently.
 ///
 /// The GBWT stores integer sequences.
@@ -43,7 +45,6 @@ pub struct GBWT {
     bwt: BWT,
 }
 
-// FIXME tests
 // Statistics.
 impl GBWT {
     /// Returns the total length of the sequences in the index.
@@ -81,6 +82,11 @@ impl GBWT {
         self.alphabet_offset() + 1
     }
 
+    // Converts node id to record id.
+    fn node_to_record(&self, i: usize) -> usize {
+        i - self.alphabet_offset()
+    }
+
     /// Returns `true` if node identifier `id` is in the effective alphabet.
     pub fn has_node(&self, id: usize) -> bool {
         id > self.alphabet_offset() && id < self.alphabet_size()
@@ -94,7 +100,6 @@ impl GBWT {
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 // Sequence navigation.
 impl GBWT {
     /// Returns the first position in sequence `sequence`, or [`None`] if no such sequence exists.
@@ -112,10 +117,10 @@ impl GBWT {
     /// The argument and the return value are pairs (node identifier, offset in node).
     pub fn forward(&self, pos: (usize, usize)) -> Option<(usize, usize)> {
         // This also catches the endmarker.
-        if pos.0 <= self.first_node() {
+        if pos.0 < self.first_node() {
             return None;
         }
-        if let Some(record) = self.bwt.record(pos.0 - self.alphabet_offset()) {
+        if let Some(record) = self.bwt.record(self.node_to_record(pos.0)) {
             return record.lf(pos.1);
         }
         None
@@ -136,10 +141,10 @@ impl GBWT {
         if pos.0 <= self.first_node() {
             return None;
         }
-        let reverse_id = support::flip_node(pos.0 - self.alphabet_offset());
+        let reverse_id = self.node_to_record(support::flip_node(pos.0));
         if let Some(record) = self.bwt.record(reverse_id) {
             if let Some(predecessor) = record.predecessor_at(pos.1) {
-                if let Some(pred_record) = self.bwt.record(predecessor) {
+                if let Some(pred_record) = self.bwt.record(self.node_to_record(predecessor)) {
                     if let Some(offset) = pred_record.offset_to(pos) {
                         return Some((predecessor, offset));
                     }
@@ -158,7 +163,6 @@ impl GBWT {
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 impl Serialize for GBWT {
     fn serialize_header<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
         self.header.serialize(writer)
@@ -173,10 +177,11 @@ impl Serialize for GBWT {
     }
 
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
-        let header = Header::<GBWTPayload>::load(reader)?;
+        let mut header = Header::<GBWTPayload>::load(reader)?;
         if let Err(msg) = header.validate() {
             return Err(Error::new(ErrorKind::InvalidData, msg));
         }
+        header.unset(GBWTPayload::FLAG_METADATA); // TODO: We do not handle metadata at the moment.
         let mut tags = Tags::load(reader)?;
         tags.insert(SOURCE_KEY, SOURCE_VALUE);
         let bwt = BWT::load(reader)?;
