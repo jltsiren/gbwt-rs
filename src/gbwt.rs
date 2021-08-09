@@ -19,6 +19,7 @@ use simple_sds::serialize::Serialize;
 use simple_sds::serialize;
 
 use std::io::{Error, ErrorKind};
+use std::iter::FusedIterator;
 use std::io;
 
 #[cfg(test)]
@@ -103,12 +104,12 @@ impl GBWT {
 // Sequence navigation.
 impl GBWT {
     // FIXME we should cache the endmarker
-    /// Returns the first position in sequence `sequence`, or [`None`] if no such sequence exists.
+    /// Returns the first position in sequence `id`, or [`None`] if no such sequence exists.
     ///
     /// The return value is a pair (node identifier, offset in node).
-    pub fn start(&self, sequence: usize) -> Option<(usize, usize)> {
+    pub fn start(&self, id: usize) -> Option<(usize, usize)> {
         if let Some(record) = self.bwt.record(ENDMARKER) {
-            return record.lf(sequence);
+            return record.lf(id);
         }
         None
     }
@@ -155,7 +156,15 @@ impl GBWT {
         None
     }
 
-    // FIXME iter(sequence)
+    /// Returns an iterator over sequence `id`.
+    ///
+    /// The iterator will be empty if no such sequence exists.
+    pub fn sequence(&self, id: usize) -> SequenceIter {
+        SequenceIter {
+            parent: self,
+            next: self.start(id),
+        }
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -207,6 +216,29 @@ impl Serialize for GBWT {
 
 //-----------------------------------------------------------------------------
 
-// FIXME Iter
+/// An iterator over a sequence in [`GBWT`].
+///
+/// The type of `Item` is [`usize`].
+#[derive(Clone, Debug)]
+pub struct SequenceIter<'a> {
+    parent: &'a GBWT,
+    // The next position.
+    next: Option<(usize, usize)>,
+}
+
+impl<'a> Iterator for SequenceIter<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(pos) = self.next {
+            self.next = self.parent.forward(pos);
+            return Some(pos.0);
+        } else {
+            return None;
+        }
+    }
+}
+
+impl<'a> FusedIterator for SequenceIter<'a> {}
 
 //-----------------------------------------------------------------------------

@@ -109,7 +109,16 @@ fn backward() {
     }
 }
 
+#[test]
+fn sequence() {
+    let filename = support::get_test_data("example.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
 
-// Iter
+    for i in 0..index.sequences() {
+        let extracted = extract_sequence(&index, i);
+        let iterated: Vec<usize> = index.sequence(i).collect();
+        assert_eq!(iterated, extracted, "Invalid sequence {} from an iterator", i);
+    }
+}
 
 //-----------------------------------------------------------------------------
