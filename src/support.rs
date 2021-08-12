@@ -103,6 +103,15 @@ pub fn flip_path(id: usize) -> usize {
     id ^ 1
 }
 
+/// Returns the reverse of the given path.
+///
+/// The reverse path visits the other orientation of each node in reverse order.
+pub fn reverse_path(path: &[usize]) -> Vec<usize> {
+    let mut result: Vec<usize> = path.iter().map(|x| flip_node(*x)).collect();
+    result.reverse();
+    result
+}
+
 //-----------------------------------------------------------------------------
 
 /// Returns the full file name for a specific test file.

@@ -7,6 +7,15 @@ use rand::rngs::ThreadRng;
 
 //-----------------------------------------------------------------------------
 
+#[test]
+fn reverse_paths() {
+    let original = vec![1, 2, 4, 6];
+    let reversed = reverse_path(&original);
+    assert_eq!(reversed, vec![7, 5, 3, 0], "Failed to reverse the path correctly");
+}
+
+//-----------------------------------------------------------------------------
+
 fn check_array(array: &StringArray, truth: &[&str]) {
     // Statistics.
     assert_eq!(array.len(), truth.len(), "Incorrect array length");

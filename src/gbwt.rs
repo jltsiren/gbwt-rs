@@ -7,7 +7,6 @@
 //!
 //! At the moment, this implementation only supports GBWT indexes built with other tools.
 //! See also the original [C++ implementation](https://github.com/jltsiren/gbwt).
-// FIXME example
 
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
 use crate::bwt::BWT;
@@ -20,6 +19,7 @@ use simple_sds::serialize;
 
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
+use std::ops::Range;
 use std::io;
 
 #[cfg(test)]
@@ -39,6 +39,40 @@ mod tests;
 ///
 /// * [`support::encode_node`], [`support::flip_node`], [`support::node_id`], and [`support::node_is_reverse`] for node identifiers.
 /// * [`support::encode_path`], [`support::flip_path`], [`support::path_id`], and [`support::path_is_reverse`] for sequence / path identifiers.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::{GBWT, SearchState};
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("example.gbwt");
+/// let index: GBWT = serialize::load_from(&filename).unwrap();
+///
+/// // Statistics.
+/// assert_eq!(index.len(), 68);
+/// assert_eq!(index.sequences(), 12);
+/// assert_eq!(index.alphabet_size(), 52);
+/// assert!(index.is_bidirectional());
+///
+/// // Manually find the second-to-last node of path 2 in forward orientation.
+/// let mut pos = index.start(support::encode_path(2, false));
+/// let mut last = None;
+/// while pos.is_some() {
+///     last = pos;
+///     pos = index.forward(pos.unwrap());
+/// }
+/// let (node, _) = index.backward(last.unwrap()).unwrap();
+/// assert_eq!(node, support::encode_node(15, false));
+///
+/// // Search for subpath (12, forward), (14, forward), (15, forward).
+/// let state = index.find(support::encode_node(12, false)).unwrap();
+/// let state = index.extend(&state, support::encode_node(14, false)).unwrap();
+/// let state = index.extend(&state, support::encode_node(15, false)).unwrap();
+/// assert_eq!(state.node, support::encode_node(15, false));
+/// assert_eq!(state.len(), 2);
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GBWT {
     header: Header<GBWTPayload>,
@@ -46,54 +80,64 @@ pub struct GBWT {
     bwt: BWT,
 }
 
-// Statistics.
+/// Index statistics.
 impl GBWT {
     /// Returns the total length of the sequences in the index.
+    #[inline]
     pub fn len(&self) -> usize {
         self.header.payload().size
     }
 
     /// Returns `true` if the index is empty.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Returns the number of sequences in the index.
+    #[inline]
     pub fn sequences(&self) -> usize {
         self.header.payload().sequences
     }
 
     /// Returns the size of the alphabet.
+    #[inline]
     pub fn alphabet_size(&self) -> usize {
         self.header.payload().alphabet_size
     }
 
     /// Returns the alphabet offset for the effective alphabet.
+    #[inline]
     pub fn alphabet_offset(&self) -> usize {
         self.header.payload().offset
     }
 
     /// Returns the size of the effective alphabet.
+    #[inline]
     pub fn effective_size(&self) -> usize {
         self.alphabet_size() - self.alphabet_offset()
     }
 
     /// Returns the smallest node identifier in the effective alphabet.
+    #[inline]
     pub fn first_node(&self) -> usize {
         self.alphabet_offset() + 1
     }
 
     // Converts node id to record id.
+    #[inline]
     fn node_to_record(&self, i: usize) -> usize {
         i - self.alphabet_offset()
     }
 
     /// Returns `true` if node identifier `id` is in the effective alphabet.
+    #[inline]
     pub fn has_node(&self, id: usize) -> bool {
         id > self.alphabet_offset() && id < self.alphabet_size()
     }
 
     /// Returns `true` if the GBWT index is bidirectional.
+    #[inline]
     pub fn is_bidirectional(&self) -> bool {
         self.header.is_set(GBWTPayload::FLAG_BIDIRECTIONAL)
     }
@@ -101,7 +145,7 @@ impl GBWT {
 
 //-----------------------------------------------------------------------------
 
-// Sequence navigation.
+/// Sequence navigation.
 impl GBWT {
     // FIXME we should cache the endmarker
     /// Returns the first position in sequence `id`, or [`None`] if no such sequence exists.
@@ -169,7 +213,49 @@ impl GBWT {
 
 //-----------------------------------------------------------------------------
 
-// FIXME impl: find, extend, bd_find, extend_forward, extend_backward
+// FIXME impl: bd_find, extend_forward, extend_backward
+/// Subpath search.
+impl GBWT {
+    /// Returns a search state for all occurrences of the given node, or [`None`] if no such node exists.
+    pub fn find(&self, node: usize) -> Option<SearchState> {
+        // This also catches the endmarker.
+        if node < self.first_node() {
+            return None;
+        }
+        if let Some(record) = self.bwt.record(self.node_to_record(node)) {
+            return Some(SearchState {
+                node: node,
+                range: 0..record.len(),
+            });
+        }
+        None
+    }
+
+    /// Extends the search by the given node forward and returns the new search state, or [`None`] if no such extensions exist.
+    ///
+    /// Assume that the current search state corresponds to a set of substring occurrences ending with the same node.
+    /// This method takes all of those substrings that continue with the given node, extends them with that node, and returns the new search state.
+    ///
+    /// # Arguments
+    ///
+    /// * `state`: A search state corresponding to a set of substring occurrences.
+    /// * `node`: Node to extend the substrings with.
+    pub fn extend(&self, state: &SearchState, node: usize) -> Option<SearchState> {
+        // This also catches the endmarker.
+        if node < self.first_node() {
+            return None;
+        }
+        if let Some(record) = self.bwt.record(self.node_to_record(state.node)) {
+            if let Some(range) = record.follow(&state.range, node) {
+                return Some(SearchState {
+                    node: node,
+                    range: range,
+                })
+            }
+        }
+        None
+    }
+}
 
 //-----------------------------------------------------------------------------
 
@@ -212,13 +298,56 @@ impl Serialize for GBWT {
 
 //-----------------------------------------------------------------------------
 
-// FIXME SearchState, BDSearchState
+/// A state of unidirectional search in [`GBWT`].
+///
+/// The state consists of the last matched GBWT node identifier and an offset range in that node.
+/// This information is equivalent to a BWT range in a normal FM-index.
+///
+/// Note that because `SearchState` contains a [`Range`], which does not implement [`Copy`], states must often be passed by reference.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SearchState {
+    /// GBWT node identifier for the last matched node.
+    pub node: usize,
+    /// Offset range in the node.
+    pub range: Range<usize>,
+}
+
+impl SearchState {
+    /// Returns the number of matching substrings (the length of the offset range).
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.range.len()
+    }
+
+    /// Returns `true` if there are no matching substrings.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.range.is_empty()
+    }
+}
+
+// FIXME BDSearchState
 
 //-----------------------------------------------------------------------------
 
 /// An iterator over a sequence in [`GBWT`].
 ///
 /// The type of `Item` is [`usize`].
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::GBWT;
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("example.gbwt");
+/// let index: GBWT = serialize::load_from(&filename).unwrap();
+///
+/// // Extract path 3 in reverse orientation.
+/// let path: Vec<usize> = index.sequence(support::encode_path(3, true)).collect();
+/// assert_eq!(path, vec![35, 33, 29, 27, 23]);
+/// ```
 #[derive(Clone, Debug)]
 pub struct SequenceIter<'a> {
     parent: &'a GBWT,

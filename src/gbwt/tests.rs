@@ -2,6 +2,8 @@ use super::*;
 
 use simple_sds::serialize;
 
+use std::collections::HashSet;
+
 //-----------------------------------------------------------------------------
 
 #[test]
@@ -118,6 +120,100 @@ fn sequence() {
         let extracted = extract_sequence(&index, i);
         let iterated: Vec<usize> = index.sequence(i).collect();
         assert_eq!(iterated, extracted, "Invalid sequence {} from an iterator", i);
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+fn true_nodes() -> HashSet<usize> {
+    let nodes: Vec<usize> = vec![11, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25];
+    let mut result: HashSet<usize> = HashSet::new();
+    for node in nodes.iter() {
+        result.insert(support::encode_node(*node, false));
+        result.insert(support::encode_node(*node, true));
+    }
+    result
+}
+
+fn count_occurrences(paths: &[Vec<usize>], subpath: &[usize]) -> usize {
+    let mut result = 0;
+    let reverse = support::reverse_path(subpath);
+    for path in paths {
+        for i in 0..path.len() {
+            if path[i..].starts_with(subpath) {
+                result += 1;
+            }
+            if path[..i + 1].ends_with(&reverse) {
+                result += 1;
+            }
+        }
+    }
+    result
+}
+
+#[test]
+fn find() {
+    let filename = support::get_test_data("example.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
+    let nodes = true_nodes();
+
+    for i in 0..index.alphabet_size() + 1 {
+        if let Some(state) = index.find(i) {
+            assert!(nodes.contains(&i), "Found a search state for a nonexistent node {}", i);
+            assert_eq!(state.node, i, "Found an invalid search state for node {}", i);
+            assert!(!state.is_empty(), "Found an empty search state for node {}", i);
+        } else {
+            assert!(!nodes.contains(&i), "Did not find a search state for node {}", i);
+        }
+    }
+}
+
+#[test]
+fn extend() {
+    let filename = support::get_test_data("example.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
+    let nodes = true_nodes();
+    let paths = true_paths();
+
+    // Check all possible and impossible extensions of the initial node.
+    for &first in nodes.iter() {
+        let start = index.find(first).unwrap();
+        for i in 0..index.alphabet_size() + 1 {
+            let count = count_occurrences(&paths, &[start.node, i]);
+            if let Some(state) = index.extend(&start, i) {
+                assert_eq!(state.len(), count, "Invalid number of occurrences for substring {} to {}", start.node, i);
+            } else {
+                assert_eq!(count, 0, "Could not find the occurrences of substring {} to {}", start.node, i);
+            }
+        }
+    }
+
+    // Search for all existing subpaths.
+    for i in 0..paths.len() {
+        let path = &paths[i];
+        for j in 0..path.len() {
+            let mut forward = index.find(path[j]).unwrap();
+            for k in j + 1..path.len() {
+                if let Some(state) = index.extend(&forward, path[k]) {
+                    let count = count_occurrences(&paths, &path[j..k + 1]);
+                    assert_eq!(state.len(), count, "Invalid number of occurrences for path {} at {}..{}", i, j, k + 1);
+                    forward = state;
+                } else {
+                    panic!("Could not find occurrences of path {} at {}..{}", i, j, k + 1);
+                }
+            }
+
+            let mut backward = index.find(support::flip_node(path[j])).unwrap();
+            for k in 1..j + 1 {
+                if let Some(state) = index.extend(&backward, support::flip_node(path[j - k])) {
+                    let count = count_occurrences(&paths, &path[j - k..j + 1]); // No need to reverse the pattern here.
+                    assert_eq!(state.len(), count, "Invalid number of occurrences for path {} at {}..{} (reversed)", i, j - k, j + 1);
+                    backward = state;
+                } else {
+                    panic!("Could not find occurrences of path {} at {}..{} (reversed)", i, j - k, j + 1);
+                }
+            }
+        }
     }
 }
 

@@ -172,7 +172,7 @@ fn check_follow(bwt: &BWT, invalid_node: usize) {
         for start in 0..len + 1 {
             for limit in start..len + 1 {
                 // With an endmarker.
-                assert_eq!(record.follow(start..limit, ENDMARKER), None, "Got a follow({}..{}, endmarker) result in record {}", start, limit, i);
+                assert_eq!(record.follow(&(start..limit), ENDMARKER), None, "Got a follow({}..{}, endmarker) result in record {}", start, limit, i);
 
                 // With each successor node.
                 for rank in 0..record.outdegree() {
@@ -180,7 +180,7 @@ fn check_follow(bwt: &BWT, invalid_node: usize) {
                     if successor == ENDMARKER {
                         continue;
                     }
-                    if let Some(result) = record.follow(start..limit, successor) {
+                    if let Some(result) = record.follow(&(start..limit), successor) {
                         let mut found = result.start..result.start;
                         for j in start..limit {
                             if let Some((node, offset)) = record.lf(j) {
@@ -200,7 +200,7 @@ fn check_follow(bwt: &BWT, invalid_node: usize) {
                 }
 
                 // With an invalid node.
-                assert_eq!(record.follow(start..limit, invalid_node), None, "Got a follow({}..{}, invalid) result in record {}", start, limit, i);
+                assert_eq!(record.follow(&(start..limit), invalid_node), None, "Got a follow({}..{}, invalid) result in record {}", start, limit, i);
             }
         }
     }
@@ -220,7 +220,7 @@ fn negative_offset_to(bwt: &BWT, invalid_node: usize) {
             if offset > 0 {
                 assert_eq!(record.offset_to((successor, offset - 1)), None, "Got an offset from record {} to a too small position in {}", record.id(), successor);
             }
-            let count = record.follow(0..record.len(), successor).unwrap().len();
+            let count = record.follow(&(0..record.len()), successor).unwrap().len();
             assert_eq!(record.offset_to((successor, offset + count)), None, "Got an offset from record {} to a too large position in {}", record.id(), successor);
         }
     }

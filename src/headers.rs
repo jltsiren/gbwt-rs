@@ -110,11 +110,13 @@ impl<T: Payload> Header<T> {
     }
 
     /// Returns a reference to the payload.
+    #[inline]
     pub fn payload(&self) -> &T {
         &self.payload
     }
 
     /// Returns a mutable reference to the payload.
+    #[inline]
     pub fn payload_mut(&mut self) -> &mut T {
         &mut self.payload
     }
