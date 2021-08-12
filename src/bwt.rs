@@ -53,7 +53,6 @@ mod tests;
 
 //-----------------------------------------------------------------------------
 
-// TODO: Add iterator over records.
 /// The BWT encoded as a vector of bytes.
 ///
 /// The encoding consists of `self.len()` concatenated node records.
@@ -310,6 +309,19 @@ impl<'a> Record<'a> {
         let mut result = 0;
         for (_, len) in RLEIter::with_sigma(self.bwt, self.edges.len()) {
             result += len;
+        }
+        result
+    }
+
+    /// Decompress the record as a vector of (successor node, offset in successor) pairs.
+    pub fn decompress(&self) -> Vec<(usize, usize)> {
+        let mut edges = self.edges.clone();
+        let mut result: Vec<(usize, usize)> = Vec::new();
+        for (rank, len) in RLEIter::with_sigma(self.bwt, self.edges.len()) {
+            for _ in 0..len {
+                result.push(edges[rank]);
+                edges[rank].1 += 1;
+            }
         }
         result
     }

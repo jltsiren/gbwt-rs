@@ -138,6 +138,7 @@ fn check_iter(bwt: &BWT) {
 }
 
 // Check all `lf()` results in the BWT, using the provided edges and runs as the source of truth.
+// Then check that decompressing the record works correctly.
 // Also checks that `offset_to()` works in positive cases and that `len()` is correct.
 fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)>]) {
     // `lf()` at each offset of each record.
@@ -146,11 +147,14 @@ fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)
             let mut offset = 0;
             let mut curr_edges = edges[i].clone();
             let curr_runs = &runs[i];
+            let decompressed = record.decompress();
+            assert_eq!(decompressed.len(), record.len(), "Invalid decompressed record {} length", i);
             for (rank, len) in curr_runs {
                 for _ in 0..*len {
                     let edge = curr_edges[*rank];
                     let expected = if edge.0 == ENDMARKER { None } else { Some(edge) };
                     assert_eq!(record.lf(offset), expected, "Invalid lf({}) in record {}", offset, i);
+                    assert_eq!(decompressed[offset], edge, "Invalid decompressed lf({}) in record {}", offset, i);
                     let expected = if edge.0 == ENDMARKER { None } else { Some(offset) };
                     assert_eq!(record.offset_to(edge), expected, "Invalid offset_to(({}, {})) in record {}", edge.0, edge.1, i);
                     offset += 1;

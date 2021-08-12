@@ -78,6 +78,7 @@ pub struct GBWT {
     header: Header<GBWTPayload>,
     tags: Tags,
     bwt: BWT,
+    endmarker: Vec<(usize, usize)>,
 }
 
 /// Index statistics.
@@ -147,15 +148,15 @@ impl GBWT {
 
 /// Sequence navigation.
 impl GBWT {
-    // FIXME we should cache the endmarker
     /// Returns the first position in sequence `id`, or [`None`] if no such sequence exists.
     ///
     /// The return value is a pair (node identifier, offset in node).
     pub fn start(&self, id: usize) -> Option<(usize, usize)> {
-        if let Some(record) = self.bwt.record(ENDMARKER) {
-            return record.lf(id);
+        if id < self.endmarker.len() {
+            Some(self.endmarker[id])
+        } else {
+            None
         }
-        None
     }
 
     /// Follows the sequence forward and returns the next position, or [`None`] if no such position exists.
@@ -278,16 +279,23 @@ impl Serialize for GBWT {
             return Err(Error::new(ErrorKind::InvalidData, msg));
         }
         header.unset(GBWTPayload::FLAG_METADATA); // TODO: We do not handle metadata at the moment.
+
         let mut tags = Tags::load(reader)?;
         tags.insert(SOURCE_KEY, SOURCE_VALUE);
+
         let bwt = BWT::load(reader)?;
-        // FIXME we should decompress the endmarker
+
+        // Decompress the endmarker, as the record can be poorly compressible.
+        let endmarker = if bwt.is_empty() { Vec::new() } else { bwt.record(ENDMARKER).unwrap().decompress() };
+
         serialize::skip_option(reader)?; // Document array samples.
         serialize::skip_option(reader)?; // Metadata. TODO: Support
+
         Ok(GBWT {
             header: header,
             tags: tags,
             bwt: bwt,
+            endmarker: endmarker,
         })
     }
 
@@ -313,20 +321,47 @@ pub struct SearchState {
 }
 
 impl SearchState {
-    /// Returns the number of matching substrings (the length of the offset range).
+    /// Returns the number of matching substring occurrences (the length of the offset range).
     #[inline]
     pub fn len(&self) -> usize {
         self.range.len()
     }
 
-    /// Returns `true` if there are no matching substrings.
+    /// Returns `true` if there are no matching substring occurrences.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.range.is_empty()
     }
 }
 
-// FIXME BDSearchState
+/// A state of bidirectional search in a bidirectional [`GBWT`].
+///
+/// The state consists of forward and reverse search states.
+/// It usually corresponds to all occurrences of a substring `pattern`.
+/// The forward state is then the search state for `pattern`, while the reverse state is for the reverse pattern obtained with [`support::reverse_path`].
+///
+/// Note that because `BidirectionalState` contains a [`Range`], which does not implement [`Copy`], states must often be passed by reference.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BidirectionalState {
+    /// GBWT search state for the forward pattern.
+    pub forward: SearchState,
+    /// GBWT search state for the reverse pattern.
+    pub reverse: SearchState,
+}
+
+impl BidirectionalState {
+    /// Returns the number of matching substring occurrences (the length of the offset range).
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.forward.len()
+    }
+
+    /// Returns `true` if there are no matching substring occurrences.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.forward.is_empty()
+    }
+}
 
 //-----------------------------------------------------------------------------
 
