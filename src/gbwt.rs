@@ -181,9 +181,7 @@ impl GBWT {
     ///
     /// Panics if the index is not bidirectional.
     pub fn backward(&self, pos: (usize, usize)) -> Option<(usize, usize)> {
-        if !self.is_bidirectional() {
-            panic!("Following sequences backward is only possible in a bidirectional GBWT");
-        }
+        assert!(self.is_bidirectional(), "Following sequences backward requires a bidirectional GBWT");
         // This also catches the endmarker.
         if pos.0 <= self.first_node() {
             return None;
@@ -214,7 +212,6 @@ impl GBWT {
 
 //-----------------------------------------------------------------------------
 
-// FIXME impl: bd_find, extend_forward, extend_backward
 /// Subpath search.
 impl GBWT {
     /// Returns a search state for all occurrences of the given node, or [`None`] if no such node exists.
@@ -256,6 +253,29 @@ impl GBWT {
         }
         None
     }
+
+    // FIXME example, tests
+    /// Returns a bidirectional search state for all occurrences of the given node, or [`None`] if no such node exists.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if the index is not bidirectional.
+    pub fn bd_find(&self, node: usize) -> Option<BidirectionalState> {
+        assert!(self.is_bidirectional(), "Bidirectional search requires a bidirectional GBWT");
+        if let Some(state) = self.find(node) {
+            let reverse = SearchState {
+                node: support::flip_node(state.node),
+                range: state.range.clone(),
+            };
+            return Some(BidirectionalState {
+                forward: state,
+                reverse: reverse,
+            });
+        }
+        None
+    }
+
+    // FIXME extend_forward, extend_backward
 }
 
 //-----------------------------------------------------------------------------

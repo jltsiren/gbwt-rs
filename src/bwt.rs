@@ -442,6 +442,7 @@ impl<'a> Record<'a> {
     /// Follows all sequences in the offset range to the given node.
     ///
     /// Returns a semiopen offset range in the destination node, or [`None`] if no such sequences exist.
+    /// See also [`Record::bd_follow`].
     ///
     /// # Arguments
     ///
@@ -460,13 +461,10 @@ impl<'a> Record<'a> {
         let mut result = self.offset(rank)..self.offset(rank);
         let mut offset = 0;
         for (c, len) in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
-            if offset < range.end {
-                if c == rank {
-                    if offset < range.start {
-                        result.start += if offset + len > range.start { range.start - offset } else { len };
-                    }
-                    result.end += if offset + len > range.end { range.end - offset } else { len };
-                }
+            if c == rank {
+                let run = offset..offset + len;
+                result.start += support::intersect(&run, &(0..range.start)).len();
+                result.end += support::intersect(&run, &(0..range.end)).len();
             }
             offset += len;
             if offset >= range.end {
@@ -475,6 +473,50 @@ impl<'a> Record<'a> {
         }
 
         if result.is_empty() { None } else { Some(result) }
+    }
+
+    /// Follows all sequences in the offset range to the given node.
+    ///
+    /// This query assumes that the GBWT index is bidirectional.
+    /// Returns a semiopen offset range in the destination node, or [`None`] if no such sequences exist.
+    /// The second return value is the number of occurrences of nodes `v` in the query range such that [`support::flip_node`]`(v) < `[`support::flip_node`]`(node)`.
+    /// This information can be used for updating the reverse range in bidirectional search.
+    /// See also [`Record::follow`].
+    ///
+    /// # Arguments
+    ///
+    /// * `range`: Offset range in the record.
+    /// * `node`: Destination node.
+    pub fn bd_follow(&self, range: &Range<usize>, node: usize) -> Option<(Range<usize>, usize)> {
+        if range.is_empty() || node == ENDMARKER {
+            return None;
+        }
+        let rank = self.edge_to(node);
+        if rank == None {
+            return None;
+        }
+        let rank = rank.unwrap();
+        let reverse = support::flip_node(node);
+
+        let mut result = self.offset(rank)..self.offset(rank);
+        let mut count = 0;
+        let mut offset = 0;
+        for (c, len) in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
+            let run = offset..offset + len;
+            if c == rank {
+                result.start += support::intersect(&run, &(0..range.start)).len();
+                result.end += support::intersect(&run, &(0..range.end)).len();
+            }
+            if support::flip_node(self.successor(c)) < reverse {
+                count += support::intersect(&run, &range).len();
+            }
+            offset += len;
+            if offset >= range.end {
+                break;
+            }
+        }
+
+        if result.is_empty() { None } else { Some((result, count)) }
     }
 }
 

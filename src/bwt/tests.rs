@@ -168,6 +168,8 @@ fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)
 }
 
 // Check all `follow()` results in the BWT, using `lf()` as the source of truth.
+// Also checks that `bd_follow()` returns the same ranges.
+// The tests for bidirectional search in `GBWT` make sure that the second return values are correct.
 fn check_follow(bwt: &BWT, invalid_node: usize) {
     for record in bwt.iter() {
         let i = record.id();
@@ -177,6 +179,7 @@ fn check_follow(bwt: &BWT, invalid_node: usize) {
             for limit in start..len + 1 {
                 // With an endmarker.
                 assert_eq!(record.follow(&(start..limit), ENDMARKER), None, "Got a follow({}..{}, endmarker) result in record {}", start, limit, i);
+                assert_eq!(record.bd_follow(&(start..limit), ENDMARKER), None, "Got a bd_follow({}..{}, endmarker) result in record {}", start, limit, i);
 
                 // With each successor node.
                 for rank in 0..record.outdegree() {
@@ -194,17 +197,24 @@ fn check_follow(bwt: &BWT, invalid_node: usize) {
                             }
                         }
                         assert_eq!(result, found, "follow({}..{}, {}) did not find the correct range in record {}", start, limit, successor, i);
+                        if let Some((bd_result, _)) =  record.bd_follow(&(start..limit), successor) {
+                            assert_eq!(bd_result, result, "bd_follow({}..{}, {}) did not find the same range as follow() in record {}", start, limit, successor, i);
+                        } else {
+                            panic!("bd_follow({}..{}, {}) did not find a result in record {}", start, limit, successor, i);
+                        }
                     } else {
                         for j in start..limit {
                             if let Some((node, _)) = record.lf(j) {
                                 assert_ne!(node, successor, "follow({}..{}, {}) did not follow offset {} in record {}", start, limit, successor, j, i);
                             }
+                            assert_eq!(record.bd_follow(&(start..limit), successor), None, "Got a bd_follow({}..{}, {}) result in record {}", start, limit, successor, i);
                         }
                     }
                 }
 
                 // With an invalid node.
                 assert_eq!(record.follow(&(start..limit), invalid_node), None, "Got a follow({}..{}, invalid) result in record {}", start, limit, i);
+                assert_eq!(record.bd_follow(&(start..limit), invalid_node), None, "Got a bd_follow({}..{}, invalid) result in record {}", start, limit, i);
             }
         }
     }

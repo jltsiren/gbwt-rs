@@ -5,14 +5,25 @@ It is based on the [Simple-SDS](https://github.com/jltsiren/simple-sds) library.
 
 ## Scope
 
-The initial goal is to support the following functionality:
+### GBWT
 
-* Simple-SDS file formats for [GBWT](https://github.com/jltsiren/gbwt/SERIALIZATION.md) and [GBZ](https://github.com/jltsiren/gbwtgraph/SERIALIZATION.md).
-* Unidirectional and bidirectional search in GBWT.
-* Iteration over paths.
-* GFA extraction from a GBZ file.
+- [x] Simple-SDS [file format](https://github.com/jltsiren/gbwt/SERIALIZATION.md)
+- [x] Iteration over paths
+- [x] Unidirectional search
+- [ ] Bidirectional search
+- [ ] Metadata
+- [ ] Locate queries
 
-Various construction/merging algorithms and extensions such as the caching layer and document listing structures may be implemented later.
+### GBWTGraph / GBZ
+
+- [ ] Simple-SDS [file format](https://github.com/jltsiren/gbwtgraph/SERIALIZATION.md)
+- [ ] GFA extraction
+
+### Possible future additions
+
+* GBWT construction
+* GBWT merging
+* Cached GBWT
 
 ## Notes
 

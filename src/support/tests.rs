@@ -14,6 +14,20 @@ fn reverse_paths() {
     assert_eq!(reversed, vec![7, 5, 3, 0], "Failed to reverse the path correctly");
 }
 
+#[test]
+fn intersections() {
+    assert!(intersect(&(3..5), &(7..8)).is_empty(), "Failed when a is before b");
+    assert_eq!(intersect(&(4..8), &(5..11)), 5..8, "Failed when a overlaps the start of b");
+    assert_eq!(intersect(&(5..8), &(4..9)), 5..8, "Failed when a is contained in b");
+    assert_eq!(intersect(&(3..12), &(7..11)), 7..11, "Failed when a contains b");
+    assert_eq!(intersect(&(4..10), &(1..6)), 4..6, "Failed when a overlaps the end of b");
+    assert!(intersect(&(8..13), &(1..7)).is_empty(), "Failed when a is after b");
+
+    assert!(intersect(&(3..3), &(2..4)).is_empty(), "Failed when a is empty");
+    assert!(intersect(&(2..4), &(2..2)).is_empty(), "Failed when b is empty");
+    assert!(intersect(&(3..3), &(4..4)).is_empty(), "Failed when both are empty");
+}
+
 //-----------------------------------------------------------------------------
 
 fn check_array(array: &StringArray, truth: &[&str]) {

@@ -12,6 +12,7 @@ use std::collections::btree_map::Iter as TagIter;
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
+use std::ops::Range;
 use std::path::PathBuf;
 use std::str::Utf8Error;
 use std::{cmp, io};
@@ -110,6 +111,12 @@ pub fn reverse_path(path: &[usize]) -> Vec<usize> {
     let mut result: Vec<usize> = path.iter().map(|x| flip_node(*x)).collect();
     result.reverse();
     result
+}
+
+/// Returns the intersection of two ranges.
+#[inline]
+pub fn intersect(a: &Range<usize>, b: &Range<usize>) -> Range<usize> {
+    cmp::max(a.start, b.start)..cmp::min(a.end, b.end)
 }
 
 //-----------------------------------------------------------------------------
@@ -884,9 +891,7 @@ impl RLE {
         if len == 0 {
             return;
         }
-        if value >= self.sigma {
-            panic!("RLE: Cannot encode value {} with alphabet size {}", value, self.sigma);
-        }
+        assert!(value < self.sigma(), "RLE: Cannot encode value {} with alphabet size {}", value, self.sigma);
         unsafe { self.write_unchecked(value, len); }
     }
 
