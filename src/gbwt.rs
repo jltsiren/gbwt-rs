@@ -72,6 +72,14 @@ mod tests;
 /// let state = index.extend(&state, support::encode_node(15, false)).unwrap();
 /// assert_eq!(state.node, support::encode_node(15, false));
 /// assert_eq!(state.len(), 2);
+///
+/// // Bidirectional search for the same subpath.
+/// let state = index.bd_find(support::encode_node(14, false)).unwrap();
+/// let state = index.extend_backward(&state, support::encode_node(12, false)).unwrap();
+/// let state = index.extend_forward(&state, support::encode_node(15, false)).unwrap();
+/// assert_eq!(state.forward.node, support::encode_node(15, false));
+/// assert_eq!(state.reverse.node, support::encode_node(12, true));
+/// assert_eq!(state.len(), 2);
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GBWT {
@@ -254,7 +262,6 @@ impl GBWT {
         None
     }
 
-    // FIXME example, tests
     /// Returns a bidirectional search state for all occurrences of the given node, or [`None`] if no such node exists.
     ///
     /// # Panics
@@ -275,7 +282,64 @@ impl GBWT {
         None
     }
 
-    // FIXME extend_forward, extend_backward
+    /// Extends the search by the given node forward and returns the new search state, or [`None`] if no such extensions exist.
+    ///
+    /// Assume that the current search state corresponds to a set of substring occurrences ending with the same node.
+    /// This method takes all of those substrings that continue with the given node, extends them with that node, and returns the new search state.
+    ///
+    /// # Arguments
+    ///
+    /// * `state`: A bidirectional search state corresponding to a set of substring occurrences.
+    /// * `node`: Node to extend the substrings with.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if the index is not bidirectional.
+    pub fn extend_forward(&self, state: &BidirectionalState, node: usize) -> Option<BidirectionalState> {
+        assert!(self.is_bidirectional(), "Bidirectional search requires a bidirectional GBWT");
+        // This also catches the endmarker.
+        if node < self.first_node() {
+            return None;
+        }
+        if let Some(record) = self.bwt.record(self.node_to_record(state.forward.node)) {
+            if let Some((range, offset)) = record.bd_follow(&state.forward.range, node) {
+                let forward = SearchState {
+                    node: node,
+                    range: range,
+                };
+                let pos = state.reverse.range.start + offset;
+                let reverse = SearchState {
+                    node: state.reverse.node,
+                    range: pos..pos + forward.len(),
+                };
+                return Some(BidirectionalState {
+                    forward: forward,
+                    reverse: reverse,
+                });
+            }
+        }
+        None
+    }
+
+    /// Extends the search by the given node backward and returns the new search state, or [`None`] if no such extensions exist.
+    ///
+    /// Assume that the current search state corresponds to a set of substring occurrences starting with the same node.
+    /// This method takes all of those substrings that are preceded by the given node, extends them with that node, and returns the new search state.
+    ///
+    /// # Arguments
+    ///
+    /// * `state`: A bidirectional search state corresponding to a set of substring occurrences.
+    /// * `node`: Node to extend the substrings with.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if the index is not bidirectional.
+    pub fn extend_backward(&self, state: &BidirectionalState, node: usize) -> Option<BidirectionalState> {
+        if let Some(result) = self.extend_forward(&state.flip(), support::flip_node(node)) {
+            return Some(result.flip());
+        }
+        None
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -380,6 +444,14 @@ impl BidirectionalState {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.forward.is_empty()
+    }
+
+    /// Returns a new search state with the forward and reverse states flipped.
+    pub fn flip(&self) -> BidirectionalState {
+        BidirectionalState {
+            forward: self.reverse.clone(),
+            reverse: self.forward.clone(),
+        }
     }
 }
 

@@ -179,11 +179,11 @@ fn extend() {
     for &first in nodes.iter() {
         let start = index.find(first).unwrap();
         for i in 0..index.alphabet_size() + 1 {
-            let count = count_occurrences(&paths, &[start.node, i]);
+            let count = count_occurrences(&paths, &[first, i]);
             if let Some(state) = index.extend(&start, i) {
-                assert_eq!(state.len(), count, "Invalid number of occurrences for substring {} to {}", start.node, i);
+                assert_eq!(state.len(), count, "Invalid number of occurrences for substring {} to {}", first, i);
             } else {
-                assert_eq!(count, 0, "Could not find the occurrences of substring {} to {}", start.node, i);
+                assert_eq!(count, 0, "Could not find the occurrences of substring {} to {}", first, i);
             }
         }
     }
@@ -204,13 +204,107 @@ fn extend() {
             }
 
             let mut backward = index.find(support::flip_node(path[j])).unwrap();
-            for k in 1..j + 1 {
-                if let Some(state) = index.extend(&backward, support::flip_node(path[j - k])) {
-                    let count = count_occurrences(&paths, &path[j - k..j + 1]); // No need to reverse the pattern here.
-                    assert_eq!(state.len(), count, "Invalid number of occurrences for path {} at {}..{} (reversed)", i, j - k, j + 1);
+            for k in (0..j).rev() {
+                if let Some(state) = index.extend(&backward, support::flip_node(path[k])) {
+                    let count = count_occurrences(&paths, &path[k..j + 1]); // No need to reverse the pattern here.
+                    assert_eq!(state.len(), count, "Invalid number of occurrences for path {} at {}..{} (reversed)", i, k, j + 1);
                     backward = state;
                 } else {
-                    panic!("Could not find occurrences of path {} at {}..{} (reversed)", i, j - k, j + 1);
+                    panic!("Could not find occurrences of path {} at {}..{} (reversed)", i, k, j + 1);
+                }
+            }
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+fn bd_search(index: &GBWT, path: &[usize], first: usize, range: &Range<usize>) -> Option<BidirectionalState> {
+    let mut state = index.bd_find(path[first])?;
+    for i in first + 1..range.end {
+        state = index.extend_forward(&state, path[i])?;
+    }
+    for i in (range.start..first).rev() {
+        state = index.extend_backward(&state, path[i])?;
+    }
+    Some(state)
+}
+
+#[test]
+fn bd_find() {
+    let filename = support::get_test_data("example.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
+    let nodes = true_nodes();
+
+    for i in 0..index.alphabet_size() + 1 {
+        if let Some(state) = index.bd_find(i) {
+            assert!(nodes.contains(&i), "Found a search state for a nonexistent node {}", i);
+            assert_eq!(state.forward.node, i, "Found an invalid search state for node {}", i);
+            assert!(!state.is_empty(), "Found an empty search state for node {}", i);
+            assert_eq!(state.reverse.node, support::flip_node(i), "Found an invalid reverse node for node {}", i);
+            assert_eq!(state.reverse.len(), state.forward.len(), "Invalid reverse range length for node {}", i);
+        } else {
+            assert!(!nodes.contains(&i), "Did not find a search state for node {}", i);
+        }
+    }
+}
+
+#[test]
+fn bd_extend() {
+    let filename = support::get_test_data("example.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
+    let nodes = true_nodes();
+    let paths = true_paths();
+
+    // Check all possible and impossible extensions of the initial node.
+    for &first in nodes.iter() {
+        let start = index.bd_find(first).unwrap();
+        for i in 0..index.alphabet_size() + 1 {
+            // Forward.
+            let count = count_occurrences(&paths, &[first, i]);
+            if let Some(state) = index.extend_forward(&start, i) {
+                assert_eq!(state.len(), count, "Invalid number of occurrences for substring {} to {} (forward)", first, i);
+            } else {
+                assert_eq!(count, 0, "Could not find the occurrences of substring {} to {} (forward)", first, i);
+            }
+            // Backward.
+            let count = count_occurrences(&paths, &[i, first]);
+            if let Some(state) = index.extend_backward(&start, i) {
+                assert_eq!(state.len(), count, "Invalid number of occurrences for substring {} to {} (backward)", i, first);
+            } else {
+                assert_eq!(count, 0, "Could not find the occurrences of substring {} to {} (backward)", i, first);
+            }
+        }
+    }
+
+    // Search for all existing subpaths.
+    for i in 0..paths.len() {
+        let path = &paths[i];
+        for first in 0..path.len() {
+            for start in 0..first + 1 {
+                for end in first + 1..path.len() + 1 {
+                    // Forward path.
+                    let count = count_occurrences(&paths, &path[start..end]);
+                    if let Some(state) = bd_search(&index, &path, first, &(start..end)) {
+                        assert_eq!(state.len(), count, "Invalid number of occurrences for path {} at {}..{} from {}", i, start, end, first);
+                        assert_eq!(state.reverse.len(), state.len(), "Invalid reverse state length for path {} at {}..{} from {}", i, start, end, first);
+                        assert_eq!(state.forward.node, path[end - 1], "Invalid final node for path {} at {}..{} from {}", i, start, end, first);
+                        assert_eq!(state.reverse.node, support::flip_node(path[start]), "Invalid initial node for path {} at {}..{} from {}", i, start, end, first);
+                    } else {
+                        panic!("Could not find occurrences of path {} at {}..{} from {}", i, start, end, first);
+                    }
+
+                    // Reverse path.
+                    let reversed = support::reverse_path(&path);
+                    let count = count_occurrences(&paths, &reversed[start..end]);
+                    if let Some(state) = bd_search(&index, &reversed, first, &(start..end)) {
+                        assert_eq!(state.len(), count, "Invalid number of occurrences for path {} at {}..{} from {} (reversed)", i, start, end, first);
+                        assert_eq!(state.reverse.len(), state.len(), "Invalid reverse state length for path {} at {}..{} from {} (reversed)", i, start, end, first);
+                        assert_eq!(state.forward.node, reversed[end - 1], "Invalid final node for path {} at {}..{} from {} (reversed)", i, start, end, first);
+                        assert_eq!(state.reverse.node, support::flip_node(reversed[start]), "Invalid initial node for path {} at {}..{} from {} (reversed)", i, start, end, first);
+                    } else {
+                        panic!("Could not find occurrences of path {} at {}..{} from {} (reversed)", i, start, end, first);
+                    }
                 }
             }
         }
