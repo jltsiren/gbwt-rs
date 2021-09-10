@@ -3,6 +3,7 @@ use super::*;
 use simple_sds::serialize;
 
 use std::collections::HashSet;
+use std::convert::TryFrom;
 
 //-----------------------------------------------------------------------------
 
@@ -309,6 +310,130 @@ fn bd_extend() {
             }
         }
     }
+}
+
+//-----------------------------------------------------------------------------
+
+const SAMPLES: usize = 5;
+const CONTIGS: usize = 4;
+const PHASES: usize = 2;
+
+fn create_metadata(paths: bool, samples: bool, contigs: bool) -> Metadata {
+    let mut header = Header::<MetadataPayload>::new();
+    header.payload_mut().sample_count = SAMPLES;
+    header.payload_mut().haplotype_count = SAMPLES * PHASES;
+    header.payload_mut().contig_count = CONTIGS;
+
+    let mut path_names = Vec::<PathName>::new();
+    if paths {
+        header.set(MetadataPayload::FLAG_PATH_NAMES);
+        for sample in 0..SAMPLES {
+            for contig in 0..CONTIGS {
+                for phase in 0..PHASES {
+                    path_names.push(PathName::from_fields(sample, contig, phase, 0));
+                }
+            }
+        }
+    }
+
+    let mut sample_names = Vec::<String>::new();
+    if samples {
+        header.set(MetadataPayload::FLAG_SAMPLE_NAMES);
+        for sample in 0..SAMPLES {
+            sample_names.push(format!("sample_{}", sample));
+        }
+    }
+
+    let mut contig_names = Vec::<String>::new();
+    if contigs {
+        header.set(MetadataPayload::FLAG_CONTIG_NAMES);
+        for contig in 0..CONTIGS {
+            contig_names.push(format!("contig_{}", contig));
+        }
+    }
+
+    Metadata {
+        header: header,
+        path_names: path_names,
+        sample_names: Dictionary::try_from(sample_names).unwrap(),
+        contig_names: Dictionary::try_from(contig_names).unwrap(),
+    }
+}
+
+fn test_metadata(paths: bool, samples: bool, contigs: bool, name: &str) {
+    let metadata = create_metadata(paths, samples, contigs);
+
+    // Contents.
+    assert_eq!(metadata.has_path_names(), paths, "{}: Invalid path name flag", name);
+    assert_eq!(metadata.has_sample_names(), samples, "{}: Invalid sample name flag", name);
+    assert_eq!(metadata.has_contig_names(), contigs, "{}: Invalid contig name flag", name);
+
+    // Statistics.
+    if paths {
+        assert_eq!(metadata.paths(), SAMPLES * CONTIGS * PHASES, "{}: Invalid path count", name);
+    } else {
+        assert_eq!(metadata.paths(), 0, "{}: Invalid path count", name);
+    }
+    assert_eq!(metadata.samples(), SAMPLES, "{}: Invalid sample count", name);
+    assert_eq!(metadata.haplotypes(), SAMPLES * PHASES, "{}: Invalid haplotype count", name);
+    assert_eq!(metadata.contigs(), CONTIGS, "{}: Invalid contig count", name);
+
+    // Path names.
+    if paths {
+        let mut index = 0;
+        let mut iter = metadata.path_iter();
+        for sample in 0..SAMPLES {
+            for contig in 0..CONTIGS {
+                for phase in 0..PHASES {
+                    let path = PathName::from_fields(sample, contig, phase, 0);
+                    assert_eq!(metadata.path(index), Some(path), "{}: Invalid path name {}", name, index);
+                    assert_eq!(iter.next(), Some(&path), "{}: Invalid path name {} from iterator", name, index);
+                    index += 1;
+                }
+            }
+        }
+        assert_eq!(metadata.path(index), None, "{}: Got a path name past the end", name);
+        assert_eq!(iter.next(), None, "{}: Got a path name past the end from iterator", name);
+    }
+
+    // Sample names.
+    if samples {
+        let mut iter = metadata.sample_iter();
+        for sample in 0..SAMPLES {
+            let sample_name = format!("sample_{}", sample);
+            assert_eq!(metadata.sample(sample), Some(sample_name.as_str()), "{}: Invalid sample name {}", name, sample);
+            assert_eq!(iter.next(), Some(sample_name.as_bytes()), "{}: Invalid sample name {} from iterator", name, sample);
+        }
+        assert_eq!(metadata.sample(SAMPLES), None, "{}: Got a sample name past the end", name);
+        assert_eq!(iter.next(), None, "{}: Got a sample name past the end from iterator", name);
+    }
+
+    // Contig names.
+    if contigs {
+        let mut iter = metadata.contig_iter();
+        for contig in 0..CONTIGS {
+            let contig_name = format!("contig_{}", contig);
+            assert_eq!(metadata.contig(contig), Some(contig_name.as_str()), "{}: Invalid contig name {}", name, contig);
+            assert_eq!(iter.next(), Some(contig_name.as_bytes()), "{}: Invalid contig name {} from iterator", name, contig);
+        }
+        assert_eq!(metadata.contig(CONTIGS), None, "{}: Got a contig name past the end", name);
+        assert_eq!(iter.next(), None, "{}: Got a contig name past the end from iterator", name);
+    }
+
+    serialize::test(&metadata, name, None, true);
+}
+
+#[test]
+fn metadata() {
+    test_metadata(true, false, false, "Paths");
+    test_metadata(false, true, false, "Samples");
+    test_metadata(false, false, true, "Contigs");
+}
+
+#[test]
+fn path_names() {
+    let name = PathName::new();
+    assert_eq!(name.size_in_elements(), 2, "Invalid serialized size for a path name");
 }
 
 //-----------------------------------------------------------------------------

@@ -499,7 +499,7 @@ impl<'a> FusedIterator for SequenceIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME document, example, tests
+// FIXME document, example
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Metadata {
     header: Header<MetadataPayload>,
@@ -598,7 +598,6 @@ impl Metadata {
     }
 }
 
-// FIXME tests
 impl Serialize for Metadata {
     fn serialize_header<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
         self.header.serialize(writer)
@@ -617,7 +616,7 @@ impl Serialize for Metadata {
             return Err(Error::new(ErrorKind::InvalidData, msg));
         }
 
-        let path_names: Vec<PathName> = Vec::load(reader)?;
+        let path_names = Vec::<PathName>::load(reader)?;
         if header.is_set(MetadataPayload::FLAG_PATH_NAMES) == path_names.is_empty() {
             return Err(Error::new(ErrorKind::InvalidData, "Metadata: Path name flag does not match the presence of path names"));
         }
@@ -655,7 +654,7 @@ impl Serialize for Metadata {
 
 //-----------------------------------------------------------------------------
 
-// FIXME document, tests (size?)
+// FIXME document
 /// A structured path name.
 ///
 /// Each name has four components: sample, contig, phase / haplotype, and fragment / count.
@@ -680,6 +679,16 @@ impl PathName {
     /// Returns a new path name with all components set to 0.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Returns a path name with the given values in each field.
+    pub fn from_fields(sample: usize, contig: usize, phase: usize, fragment: usize) -> Self {
+        PathName {
+            sample: sample as u32,
+            contig: contig as u32,
+            phase: phase as u32,
+            fragment: fragment as u32,
+        }
     }
 }
 
