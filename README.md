@@ -7,7 +7,7 @@ It is based on the [Simple-SDS](https://github.com/jltsiren/simple-sds) library.
 
 ### GBWT
 
-- [x] Simple-SDS [file format](https://github.com/jltsiren/gbwt/SERIALIZATION.md)
+- [x] Simple-SDS [file format](https://github.com/jltsiren/gbwt/blob/master/SERIALIZATION.md)
 - [x] Iteration over paths
 - [x] Unidirectional search
 - [x] Bidirectional search
@@ -16,7 +16,7 @@ It is based on the [Simple-SDS](https://github.com/jltsiren/simple-sds) library.
 
 ### GBWTGraph / GBZ
 
-- [ ] Simple-SDS [file format](https://github.com/jltsiren/gbwtgraph/SERIALIZATION.md)
+- [ ] Simple-SDS [file format](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md)
 - [ ] GFA extraction
 
 ### Possible future additions

@@ -62,6 +62,11 @@ pub struct Header<T: Payload> {
 }
 
 impl<T: Payload> Header<T> {
+    /// Creates a default header.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Returns the file format version in the header.
     #[inline]
     pub fn version(&self) -> u32 {
@@ -221,7 +226,48 @@ impl Payload for GBWTPayload {
 
 //-----------------------------------------------------------------------------
 
-// TODO MetadataHeader
+/// Payload for the GBWT metadata header.
+#[repr(C)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+pub struct MetadataPayload {
+    /// Number of samples in the GBWT.
+    pub sample_count: usize,
+
+    /// Number of haplotypes in the GBWT.
+    pub haplotype_count: usize,
+
+    /// Number of contigs in the graph.
+    pub contig_count: usize,
+}
+
+impl MetadataPayload {
+    /// The metadata contains path names.
+    pub const FLAG_PATH_NAMES: u64   = 0x0001;
+
+    /// The metadata contains sample names.
+    pub const FLAG_SAMPLE_NAMES: u64 = 0x0002;
+
+    /// The metadata contains contig names.
+    pub const FLAG_CONTIG_NAMES: u64 = 0x0004;
+}
+
+impl Payload for MetadataPayload {
+    const NAME: &'static str = "MetadataHeader";
+    const TAG: u32 = 0x6B375E7A;
+    const VERSION: u32 = 2;
+    const MIN_VERSION: u32 = 2;
+    const DEFAULT_FLAGS: u64 = 0;
+
+    fn update(&mut self) {}
+
+    fn mask(_: u32) -> u64 {
+        Self::FLAG_PATH_NAMES | Self::FLAG_SAMPLE_NAMES | Self::FLAG_CONTIG_NAMES
+    }
+
+    fn validate(_: &Header<Self>) -> Result<(), String> {
+        Ok(())
+    }
+}
 
 //-----------------------------------------------------------------------------
 
@@ -241,7 +287,7 @@ mod tests {
 
     #[test]
     fn gbwt_header() {
-        let header = Header::<GBWTPayload>::default();
+        let header = Header::<GBWTPayload>::new();
         if let Err(msg) = header.validate() {
             panic!("{}", msg);
         }
@@ -250,6 +296,7 @@ mod tests {
         assert!(header.is_set(GBWTPayload::FLAG_SIMPLE_SDS), "Default: Simple-SDS flag is not set");
         serialize::test(&header, "gbwt-header", Some(6), true);
 
+        // We only have to test setting / unsetting flags for one payload type.
         let mut header = header;
         header.set(GBWTPayload::FLAG_BIDIRECTIONAL);
         header.set(GBWTPayload::FLAG_METADATA);
@@ -260,6 +307,21 @@ mod tests {
         assert!(header.is_set(GBWTPayload::FLAG_METADATA), "Modified: Metadata flag could not be set");
         assert!(header.is_set(GBWTPayload::FLAG_SIMPLE_SDS), "Modified: Simple-SDS flag is not set");
         serialize::test(&header, "modified-gbwt-header", Some(6), true);
+
+        header.unset(GBWTPayload::FLAG_METADATA);
+        assert!(!header.is_set(GBWTPayload::FLAG_METADATA), "Modified: Metadata flag could not be unset");
+    }
+
+    #[test]
+    fn metadata_header() {
+        let header = Header::<MetadataPayload>::new();
+        if let Err(msg) = header.validate() {
+            panic!("{}", msg);
+        }
+        assert!(!header.is_set(MetadataPayload::FLAG_PATH_NAMES), "Default: Path name flag is set");
+        assert!(!header.is_set(MetadataPayload::FLAG_SAMPLE_NAMES), "Default: Sample name flag is set");
+        assert!(!header.is_set(MetadataPayload::FLAG_CONTIG_NAMES), "Default: Contig name flag is set");
+        serialize::test(&header, "metadata-header", Some(5), true);
     }
 }
 

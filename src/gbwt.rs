@@ -10,17 +10,17 @@
 
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
 use crate::bwt::BWT;
-use crate::headers::{Header, GBWTPayload};
-use crate::support::Tags;
+use crate::headers::{Header, GBWTPayload, MetadataPayload};
+use crate::support::{Dictionary, StringIter, Tags};
 use crate::support;
 
-use simple_sds::serialize::Serialize;
+use simple_sds::serialize::{Serialize, Serializable};
 use simple_sds::serialize;
 
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
 use std::ops::Range;
-use std::io;
+use std::{io, slice};
 
 #[cfg(test)]
 mod tests;
@@ -496,5 +496,193 @@ impl<'a> Iterator for SequenceIter<'a> {
 }
 
 impl<'a> FusedIterator for SequenceIter<'a> {}
+
+//-----------------------------------------------------------------------------
+
+// FIXME document, example, tests
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Metadata {
+    header: Header<MetadataPayload>,
+    path_names: Vec<PathName>,
+    sample_names: Dictionary,
+    contig_names: Dictionary,
+}
+
+impl Metadata {
+    /// Returns `true` if the metadata contains path names.
+    pub fn has_path_names(&self) -> bool {
+        self.header.is_set(MetadataPayload::FLAG_PATH_NAMES)
+    }
+
+    /// Returns `true` if the metadata contains sample names.
+    pub fn has_sample_names(&self) -> bool {
+        self.header.is_set(MetadataPayload::FLAG_SAMPLE_NAMES)
+    }
+
+    /// Returns `true` if the metadata contains contig names.
+    pub fn has_contig_names(&self) -> bool {
+        self.header.is_set(MetadataPayload::FLAG_CONTIG_NAMES)
+    }
+
+    /// Returns the number path names in the metadata.
+    ///
+    /// If there are path names, each name corresponds to a path in the original graph.
+    /// In a bidirectional GBWT, there are twice as many sequences as paths.
+    pub fn paths(&self) -> usize {
+        self.path_names.len()
+    }
+
+    /// Returns the number samples.
+    pub fn samples(&self) -> usize {
+        self.header.payload().sample_count
+    }
+
+    /// Returns the number of haplotypes.
+    ///
+    /// This generally corresponds to the number of full-length paths in a graph component.
+    pub fn haplotypes(&self) -> usize {
+        self.header.payload().haplotype_count
+    }
+
+    /// Returns the number contigs.
+    ///
+    /// A contig usually corresponds to a graph component.
+    pub fn contigs(&self) -> usize {
+        self.header.payload().contig_count
+    }
+
+    /// Returns the name of the given path, or [`None`] if there is no such name.
+    pub fn path(&self, i: usize) -> Option<PathName> {
+        if i < self.paths() {
+            Some(self.path_names[i])
+        } else {
+            None
+        }
+    }
+
+    /// Returns the name of the given sample, or [`None`] if there is no such name.
+    ///
+    /// Also returns [`None`] if the name exists but is not valid UTF-8.
+    pub fn sample(&self, i: usize) -> Option<&str> {
+        if self.has_sample_names() && i < self.samples() {
+            self.sample_names.str(i).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Returns the name of the given contig, or [`None`] if there is no such name.
+    ///
+    /// Also returns [`None`] if the name exists but is not valid UTF-8.
+    pub fn contig(&self, i: usize) -> Option<&str> {
+        if self.has_contig_names() && i < self.contigs() {
+            self.contig_names.str(i).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Returns an iterator over path names.
+    pub fn path_iter(&self) -> slice::Iter<PathName> {
+        self.path_names.iter()
+    }
+
+    /// Returns an iterator over sample names.
+    pub fn sample_iter(&self) -> StringIter {
+        self.sample_names.as_ref().iter()
+    }
+
+    /// Returns an iterator over contig names.
+    pub fn contig_iter(&self) -> StringIter {
+        self.contig_names.as_ref().iter()
+    }
+}
+
+// FIXME tests
+impl Serialize for Metadata {
+    fn serialize_header<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
+        self.header.serialize(writer)
+    }
+
+    fn serialize_body<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
+        self.path_names.serialize(writer)?;
+        self.sample_names.serialize(writer)?;
+        self.contig_names.serialize(writer)?;
+        Ok(())
+    }
+
+    fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
+        let header = Header::<MetadataPayload>::load(reader)?;
+        if let Err(msg) = header.validate() {
+            return Err(Error::new(ErrorKind::InvalidData, msg));
+        }
+
+        let path_names: Vec<PathName> = Vec::load(reader)?;
+        if header.is_set(MetadataPayload::FLAG_PATH_NAMES) == path_names.is_empty() {
+            return Err(Error::new(ErrorKind::InvalidData, "Metadata: Path name flag does not match the presence of path names"));
+        }
+
+        let sample_names = Dictionary::load(reader)?;
+        if header.is_set(MetadataPayload::FLAG_SAMPLE_NAMES) {
+            if header.payload().sample_count != sample_names.len() {
+                return Err(Error::new(ErrorKind::InvalidData, "Metadata: Sample count does not match the number of sample names"));
+            }
+        } else if !sample_names.is_empty() {
+            return Err(Error::new(ErrorKind::InvalidData, "Metadata: Sample names are present without the sample name flag"));
+        }
+
+        let contig_names = Dictionary::load(reader)?;
+        if header.is_set(MetadataPayload::FLAG_CONTIG_NAMES) {
+            if header.payload().contig_count != contig_names.len() {
+                return Err(Error::new(ErrorKind::InvalidData, "Metadata: Contig count does not match the number of contig names"));
+            }
+        } else if !contig_names.is_empty() {
+            return Err(Error::new(ErrorKind::InvalidData, "Metadata: Contig names are present without the contig name flag"));
+        }
+
+        Ok(Metadata {
+            header: header,
+            path_names: path_names,
+            sample_names: sample_names,
+            contig_names: contig_names,
+        })
+    }
+
+    fn size_in_elements(&self) -> usize {
+        self.header.size_in_elements() + self.path_names.size_in_elements() + self.sample_names.size_in_elements() + self.contig_names.size_in_elements()
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+// FIXME document, tests (size?)
+/// A structured path name.
+///
+/// Each name has four components: sample, contig, phase / haplotype, and fragment / count.
+/// FIXME semantics and constraints for components
+#[repr(C)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+pub struct PathName {
+    /// Sample identifier.
+    pub sample: u32,
+
+    /// Contig identifier.
+    pub contig: u32,
+
+    /// Phase / haplotype identifier.
+    pub phase: u32,
+
+    /// Fragment identifier / running count.
+    pub fragment: u32,
+}
+
+impl PathName {
+    /// Returns a new path name with all components set to 0.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Serializable for PathName {}
 
 //-----------------------------------------------------------------------------
