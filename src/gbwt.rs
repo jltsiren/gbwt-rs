@@ -252,7 +252,7 @@ impl GBWT {
             return None;
         }
         if let Some(record) = self.bwt.record(self.node_to_record(state.node)) {
-            if let Some(range) = record.follow(&state.range, node) {
+            if let Some(range) = record.follow(state.range.clone(), node) {
                 return Some(SearchState {
                     node: node,
                     range: range,
@@ -302,7 +302,7 @@ impl GBWT {
             return None;
         }
         if let Some(record) = self.bwt.record(self.node_to_record(state.forward.node)) {
-            if let Some((range, offset)) = record.bd_follow(&state.forward.range, node) {
+            if let Some((range, offset)) = record.bd_follow(state.forward.range.clone(), node) {
                 let forward = SearchState {
                     node: node,
                     range: range,
@@ -395,7 +395,8 @@ impl Serialize for GBWT {
 /// The state consists of the last matched GBWT node identifier and an offset range in that node.
 /// This information is equivalent to a BWT range in a normal FM-index.
 ///
-/// Note that because `SearchState` contains a [`Range`], which does not implement [`Copy`], states must often be passed by reference.
+/// Because `SearchState` contains a [`Range`], it does not implement [`Copy`].
+/// As search states are often reused, they are passed by reference instead of value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SearchState {
     /// GBWT node identifier for the last matched node.
@@ -424,7 +425,8 @@ impl SearchState {
 /// It usually corresponds to all occurrences of a substring `pattern`.
 /// The forward state is then the search state for `pattern`, while the reverse state is for the reverse pattern obtained with [`support::reverse_path`].
 ///
-/// Note that because `BidirectionalState` contains a [`Range`], which does not implement [`Copy`], states must often be passed by reference.
+/// Because `BidirectionalState` contains a [`Range`], it does not implement [`Copy`].
+/// As search states are often reused, they are passed by reference instead of value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BidirectionalState {
     /// GBWT search state for the forward pattern.

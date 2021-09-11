@@ -26,7 +26,7 @@
 //! assert_eq!(node_2.offset(1), 0);
 //! assert_eq!(node_2.len(), 2);
 //! assert_eq!(node_2.lf(1), Some((5, 0)));
-//! assert_eq!(node_2.follow(&(0..2), 5), Some(0..1));
+//! assert_eq!(node_2.follow(0..2, 5), Some(0..1));
 //!
 //! // Determine the length of the BWT by iterating over the records.
 //! let bwt_len = bwt.iter().fold(0, |len, record| len + record.len());
@@ -448,7 +448,7 @@ impl<'a> Record<'a> {
     ///
     /// * `range`: Offset range in the record.
     /// * `node`: Destination node.
-    pub fn follow(&self, range: &Range<usize>, node: usize) -> Option<Range<usize>> {
+    pub fn follow(&self, range: Range<usize>, node: usize) -> Option<Range<usize>> {
         if range.is_empty() || node == ENDMARKER {
             return None;
         }
@@ -487,7 +487,7 @@ impl<'a> Record<'a> {
     ///
     /// * `range`: Offset range in the record.
     /// * `node`: Destination node.
-    pub fn bd_follow(&self, range: &Range<usize>, node: usize) -> Option<(Range<usize>, usize)> {
+    pub fn bd_follow(&self, range: Range<usize>, node: usize) -> Option<(Range<usize>, usize)> {
         if range.is_empty() || node == ENDMARKER {
             return None;
         }

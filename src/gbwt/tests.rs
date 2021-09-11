@@ -220,7 +220,7 @@ fn extend() {
 
 //-----------------------------------------------------------------------------
 
-fn bd_search(index: &GBWT, path: &[usize], first: usize, range: &Range<usize>) -> Option<BidirectionalState> {
+fn bd_search(index: &GBWT, path: &[usize], first: usize, range: Range<usize>) -> Option<BidirectionalState> {
     let mut state = index.bd_find(path[first])?;
     for i in first + 1..range.end {
         state = index.extend_forward(&state, path[i])?;
@@ -286,7 +286,7 @@ fn bd_extend() {
                 for end in first + 1..path.len() + 1 {
                     // Forward path.
                     let count = count_occurrences(&paths, &path[start..end]);
-                    if let Some(state) = bd_search(&index, &path, first, &(start..end)) {
+                    if let Some(state) = bd_search(&index, &path, first, start..end) {
                         assert_eq!(state.len(), count, "Invalid number of occurrences for path {} at {}..{} from {}", i, start, end, first);
                         assert_eq!(state.reverse.len(), state.len(), "Invalid reverse state length for path {} at {}..{} from {}", i, start, end, first);
                         assert_eq!(state.forward.node, path[end - 1], "Invalid final node for path {} at {}..{} from {}", i, start, end, first);
@@ -298,7 +298,7 @@ fn bd_extend() {
                     // Reverse path.
                     let reversed = support::reverse_path(&path);
                     let count = count_occurrences(&paths, &reversed[start..end]);
-                    if let Some(state) = bd_search(&index, &reversed, first, &(start..end)) {
+                    if let Some(state) = bd_search(&index, &reversed, first, start..end) {
                         assert_eq!(state.len(), count, "Invalid number of occurrences for path {} at {}..{} from {} (reversed)", i, start, end, first);
                         assert_eq!(state.reverse.len(), state.len(), "Invalid reverse state length for path {} at {}..{} from {} (reversed)", i, start, end, first);
                         assert_eq!(state.forward.node, reversed[end - 1], "Invalid final node for path {} at {}..{} from {} (reversed)", i, start, end, first);
