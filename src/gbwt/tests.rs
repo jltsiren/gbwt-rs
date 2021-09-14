@@ -31,6 +31,17 @@ fn statistics() {
 }
 
 #[test]
+fn index_metadata() {
+    let gbwt_filename = support::get_test_data("example.gbwt");
+    let index: GBWT = serialize::load_from(&gbwt_filename).unwrap();
+    assert!(index.has_metadata(), "Index does not contain metadata");
+
+    let metadata_filename = support::get_test_data("example.meta");
+    let metadata: Metadata = serialize::load_from(&metadata_filename).unwrap();
+    assert_eq!(index.metadata().unwrap(), &metadata, "Invalid metadata in the index");
+}
+
+#[test]
 fn serialize() {
     let filename = support::get_test_data("example.gbwt");
     let index: GBWT = serialize::load_from(&filename).unwrap();
@@ -403,10 +414,12 @@ fn test_metadata(paths: bool, samples: bool, contigs: bool, name: &str) {
             let sample_name = format!("sample_{}", sample);
             assert_eq!(metadata.sample(sample), Some(sample_name.as_str()), "{}: Invalid sample name {}", name, sample);
             assert_eq!(iter.next(), Some(sample_name.as_bytes()), "{}: Invalid sample name {} from iterator", name, sample);
+            assert_eq!(metadata.sample_id(&sample_name), Some(sample), "{}: Invalid id for sample {}", name, sample_name);
         }
         assert_eq!(metadata.sample(SAMPLES), None, "{}: Got a sample name past the end", name);
         assert_eq!(iter.next(), None, "{}: Got a sample name past the end from iterator", name);
     }
+    assert!(metadata.sample_id("invalid").is_none(), "{}: Got an id for an invalid sample", name);
 
     // Contig names.
     if contigs {
@@ -415,10 +428,12 @@ fn test_metadata(paths: bool, samples: bool, contigs: bool, name: &str) {
             let contig_name = format!("contig_{}", contig);
             assert_eq!(metadata.contig(contig), Some(contig_name.as_str()), "{}: Invalid contig name {}", name, contig);
             assert_eq!(iter.next(), Some(contig_name.as_bytes()), "{}: Invalid contig name {} from iterator", name, contig);
+            assert_eq!(metadata.contig_id(&contig_name), Some(contig), "{}: Invalid id for contig {}", name, contig_name);
         }
         assert_eq!(metadata.contig(CONTIGS), None, "{}: Got a contig name past the end", name);
         assert_eq!(iter.next(), None, "{}: Got a contig name past the end from iterator", name);
     }
+    assert!(metadata.contig_id("invalid").is_none(), "{}: Got an id for an invalid contig", name);
 
     serialize::test(&metadata, name, None, true);
 }

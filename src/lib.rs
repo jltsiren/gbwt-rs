@@ -21,7 +21,7 @@ pub mod gbwt;
 pub mod headers;
 pub mod support;
 
-pub use crate::gbwt::{GBWT, SearchState, BidirectionalState};
+pub use crate::gbwt::{GBWT, SearchState, BidirectionalState, Metadata, PathName};
 
 // mod gbz: GBZ
 

@@ -80,6 +80,13 @@ mod tests;
 /// assert_eq!(state.forward.node, support::encode_node(15, false));
 /// assert_eq!(state.reverse.node, support::encode_node(12, true));
 /// assert_eq!(state.len(), 2);
+///
+/// // Metadata.
+/// assert!(index.has_metadata());
+/// let metadata = index.metadata().unwrap();
+/// assert_eq!(metadata.paths(), 6);
+/// assert_eq!(metadata.samples(), 2);
+/// assert_eq!(metadata.contigs(), 2);
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GBWT {
@@ -87,6 +94,7 @@ pub struct GBWT {
     tags: Tags,
     bwt: BWT,
     endmarker: Vec<(usize, usize)>,
+    metadata: Option<Metadata>,
 }
 
 /// Index statistics.
@@ -149,6 +157,19 @@ impl GBWT {
     #[inline]
     pub fn is_bidirectional(&self) -> bool {
         self.header.is_set(GBWTPayload::FLAG_BIDIRECTIONAL)
+    }
+}
+
+/// Metadata.
+impl GBWT {
+    /// Returns `true` if the index contains metadata.
+    pub fn has_metadata(&self) -> bool {
+        self.header.is_set(GBWTPayload::FLAG_METADATA)
+    }
+
+    /// Returns a reference to the metadata, or [`None`] if there is no metadata.
+    pub fn metadata(&self) -> Option<&Metadata> {
+        self.metadata.as_ref()
     }
 }
 
@@ -353,16 +374,15 @@ impl Serialize for GBWT {
         self.tags.serialize(writer)?;
         self.bwt.serialize(writer)?;
         serialize::absent_option(writer)?; // Document array samples.
-        serialize::absent_option(writer)?; // Metadata. TODO: Support
+        self.metadata.serialize(writer)?;
         Ok(())
     }
 
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
-        let mut header = Header::<GBWTPayload>::load(reader)?;
+        let header = Header::<GBWTPayload>::load(reader)?;
         if let Err(msg) = header.validate() {
             return Err(Error::new(ErrorKind::InvalidData, msg));
         }
-        header.unset(GBWTPayload::FLAG_METADATA); // TODO: We do not handle metadata at the moment.
 
         let mut tags = Tags::load(reader)?;
         tags.insert(SOURCE_KEY, SOURCE_VALUE);
@@ -373,18 +393,32 @@ impl Serialize for GBWT {
         let endmarker = if bwt.is_empty() { Vec::new() } else { bwt.record(ENDMARKER).unwrap().decompress() };
 
         serialize::skip_option(reader)?; // Document array samples.
-        serialize::skip_option(reader)?; // Metadata. TODO: Support
+
+        // Metadata.
+        let metadata = Option::<Metadata>::load(reader)?;
+        if header.is_set(GBWTPayload::FLAG_METADATA) != metadata.is_some() {
+            return Err(Error::new(ErrorKind::InvalidData, "GBWT: Invalid metadata flag in the header"));
+        }
+        if let Some(meta) = metadata.as_ref() {
+            if meta.has_path_names() {
+                let expected = if header.is_set(GBWTPayload::FLAG_BIDIRECTIONAL) { header.payload().sequences / 2 } else { header.payload().sequences };
+                if meta.paths() > 0 && meta.paths() != expected {
+                    return Err(Error::new(ErrorKind::InvalidData, "GBWT: Invalid path count in the metadata"));
+                }
+            }
+        }
 
         Ok(GBWT {
             header: header,
             tags: tags,
             bwt: bwt,
             endmarker: endmarker,
+            metadata: metadata,
         })
     }
 
     fn size_in_elements(&self) -> usize {
-        self.header.size_in_elements() + self.tags.size_in_elements() + self.bwt.size_in_elements() + 2 * serialize::absent_option_size()
+        self.header.size_in_elements() + self.tags.size_in_elements() + self.bwt.size_in_elements() + serialize::absent_option_size() + self.metadata.size_in_elements()
     }
 }
 
@@ -501,7 +535,48 @@ impl<'a> FusedIterator for SequenceIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME document, example
+/// Metadata for the paths in a GBWT index.
+///
+/// The metadata contains some basic statistics about the paths, and it may also contain names for paths, samples, and contigs.
+/// Samples correspond to biological samples.
+/// Contigs usually correspond to contigs in the reference sequence as well as to connected components in the graph.
+/// The number of haplotypes is an estimate for the number of full-length paths in a connected component.
+///
+/// Path names are structured names associated with each path in the original graph.
+/// If the GBWT index is bidirectional, it contains two sequences for each path name.
+/// Each path name is a unique combination of four fields: sample, contig, phase, and fragment (see [`PathName`]).
+/// The first two must be in the intervals `0..self.samples()` and `0..self.contigs()`, respectively.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::{Metadata};
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("example.meta");
+/// let metadata: Metadata = serialize::load_from(&filename).unwrap();
+///
+/// assert!(metadata.has_path_names());
+/// assert_eq!(metadata.paths(), 6);
+/// let path = metadata.path(3).unwrap();
+///
+/// assert!(metadata.has_sample_names());
+/// assert_eq!(metadata.sample(path.sample()), Some("sample"));
+///
+/// assert!(metadata.has_contig_names());
+/// assert_eq!(metadata.contig(path.contig()), Some("A"));
+///
+/// // Find the paths over contig B.
+/// let id = metadata.contig_id("B").unwrap();
+/// let mut paths = Vec::<usize>::new();
+/// for (i, path) in metadata.path_iter().enumerate() {
+///     if path.contig() == id {
+///         paths.push(i);
+///     }
+/// }
+/// assert_eq!(paths, vec![1, 4, 5]);
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Metadata {
     header: Header<MetadataPayload>,
@@ -510,20 +585,11 @@ pub struct Metadata {
     contig_names: Dictionary,
 }
 
+/// Paths.
 impl Metadata {
     /// Returns `true` if the metadata contains path names.
     pub fn has_path_names(&self) -> bool {
         self.header.is_set(MetadataPayload::FLAG_PATH_NAMES)
-    }
-
-    /// Returns `true` if the metadata contains sample names.
-    pub fn has_sample_names(&self) -> bool {
-        self.header.is_set(MetadataPayload::FLAG_SAMPLE_NAMES)
-    }
-
-    /// Returns `true` if the metadata contains contig names.
-    pub fn has_contig_names(&self) -> bool {
-        self.header.is_set(MetadataPayload::FLAG_CONTIG_NAMES)
     }
 
     /// Returns the number path names in the metadata.
@@ -532,6 +598,30 @@ impl Metadata {
     /// In a bidirectional GBWT, there are twice as many sequences as paths.
     pub fn paths(&self) -> usize {
         self.path_names.len()
+    }
+
+    /// Returns the name of the path with the given identifier, or [`None`] if there is no such name.
+    ///
+    /// Valid identifiers are in the interval `0..self.paths()`.
+    pub fn path(&self, id: usize) -> Option<PathName> {
+        if id < self.paths() {
+            Some(self.path_names[id])
+        } else {
+            None
+        }
+    }
+
+    /// Returns an iterator over path names.
+    pub fn path_iter(&self) -> slice::Iter<PathName> {
+        self.path_names.iter()
+    }
+}
+
+/// Samples.
+impl Metadata {
+    /// Returns `true` if the metadata contains sample names.
+    pub fn has_sample_names(&self) -> bool {
+        self.header.is_set(MetadataPayload::FLAG_SAMPLE_NAMES)
     }
 
     /// Returns the number samples.
@@ -546,6 +636,36 @@ impl Metadata {
         self.header.payload().haplotype_count
     }
 
+    /// Returns the name of the sample with the given identifier, or [`None`] if there is no such name.
+    ///
+    /// Valid identifiers are in the interval `0..self.samples()`.
+    /// Also returns [`None`] if the name exists but is not valid UTF-8.
+    pub fn sample(&self, id: usize) -> Option<&str> {
+        if self.has_sample_names() && id < self.samples() {
+            self.sample_names.str(id).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Returns the sample idenfier corresponding to the given sample name, or [`None`] if there is no such sample.
+    pub fn sample_id(&self, name: &str) -> Option<usize> {
+        self.sample_names.id(name)
+    }
+
+    /// Returns an iterator over sample names.
+    pub fn sample_iter(&self) -> StringIter {
+        self.sample_names.as_ref().iter()
+    }
+}
+
+/// Contigs.
+impl Metadata {
+    /// Returns `true` if the metadata contains contig names.
+    pub fn has_contig_names(&self) -> bool {
+        self.header.is_set(MetadataPayload::FLAG_CONTIG_NAMES)
+    }
+
     /// Returns the number contigs.
     ///
     /// A contig usually corresponds to a graph component.
@@ -553,45 +673,21 @@ impl Metadata {
         self.header.payload().contig_count
     }
 
-    /// Returns the name of the given path, or [`None`] if there is no such name.
-    pub fn path(&self, i: usize) -> Option<PathName> {
-        if i < self.paths() {
-            Some(self.path_names[i])
-        } else {
-            None
-        }
-    }
-
-    /// Returns the name of the given sample, or [`None`] if there is no such name.
+    /// Returns the name of the contig with the given identifier, or [`None`] if there is no such name.
     ///
+    /// Valid identifiers are in the interval `0..self.contigs()`.
     /// Also returns [`None`] if the name exists but is not valid UTF-8.
-    pub fn sample(&self, i: usize) -> Option<&str> {
-        if self.has_sample_names() && i < self.samples() {
-            self.sample_names.str(i).ok()
+    pub fn contig(&self, id: usize) -> Option<&str> {
+        if self.has_contig_names() && id < self.contigs() {
+            self.contig_names.str(id).ok()
         } else {
             None
         }
     }
 
-    /// Returns the name of the given contig, or [`None`] if there is no such name.
-    ///
-    /// Also returns [`None`] if the name exists but is not valid UTF-8.
-    pub fn contig(&self, i: usize) -> Option<&str> {
-        if self.has_contig_names() && i < self.contigs() {
-            self.contig_names.str(i).ok()
-        } else {
-            None
-        }
-    }
-
-    /// Returns an iterator over path names.
-    pub fn path_iter(&self) -> slice::Iter<PathName> {
-        self.path_names.iter()
-    }
-
-    /// Returns an iterator over sample names.
-    pub fn sample_iter(&self) -> StringIter {
-        self.sample_names.as_ref().iter()
+    /// Returns the contig idenfier corresponding to the given contig name, or [`None`] if there is no such contig.
+    pub fn contig_id(&self, name: &str) -> Option<usize> {
+        self.contig_names.id(name)
     }
 
     /// Returns an iterator over contig names.
@@ -656,11 +752,16 @@ impl Serialize for Metadata {
 
 //-----------------------------------------------------------------------------
 
-// FIXME document
 /// A structured path name.
 ///
-/// Each name has four components: sample, contig, phase / haplotype, and fragment / count.
-/// FIXME semantics and constraints for components
+/// Each path name in the same metadata structure must be unique.
+/// A path name has four components: sample, contig, phase (haplotype), and fragment (count).
+///
+/// * Samples correspond to sample identifiers in the metadata.
+/// * Contigs correspond to contig identifiers in the metadata.
+/// * Each (sample, phase) combination corresponds to a haplotype in the metadata.
+/// * Fragment field can be used as a fragment index for fragments from the sequence identified by (sample, contig, phase).
+///   It can also be used as the starting offset of the fragment in the corresponding reference sequence.
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PathName {
@@ -691,6 +792,26 @@ impl PathName {
             phase: phase as u32,
             fragment: fragment as u32,
         }
+    }
+
+    /// Returns the sample identifier.
+    pub fn sample(&self) -> usize {
+        self.sample as usize
+    }
+
+    /// Returns the contig identifier.
+    pub fn contig(&self) -> usize {
+        self.contig as usize
+    }
+
+    /// Returns the phase / haplotype identifier.
+    pub fn phase(&self) -> usize {
+        self.phase as usize
+    }
+
+    /// Returns the fragment identifier / running count.
+    pub fn fragment(&self) -> usize {
+        self.fragment as usize
     }
 }
 
