@@ -11,7 +11,7 @@ It is based on the [Simple-SDS](https://github.com/jltsiren/simple-sds) library.
 - [x] Iteration over paths
 - [x] Unidirectional search
 - [x] Bidirectional search
-- [ ] Metadata
+- [x] Metadata
 - [ ] Locate queries
 
 ### GBWTGraph / GBZ

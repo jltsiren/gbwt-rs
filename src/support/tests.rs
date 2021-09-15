@@ -283,7 +283,7 @@ fn generate_runs(n: usize, sigma: usize, w: usize) -> Vec<(usize, usize)> {
     let mut result = Vec::with_capacity(n);
     let mut rng = rand::thread_rng();
     for _ in 0..n {
-        let c: usize = rng.gen_range(0, sigma);
+        let c: usize = rng.gen_range(0..sigma);
         let len = generate_value(&mut rng, w) + 1;
         result.push((c, len));
     }
