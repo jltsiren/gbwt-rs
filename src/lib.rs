@@ -18,10 +18,12 @@
 
 pub mod bwt;
 pub mod gbwt;
+pub mod graph;
 pub mod headers;
 pub mod support;
 
 pub use crate::gbwt::{GBWT, SearchState, BidirectionalState, Metadata, PathName};
+pub use crate::graph::Graph;
 
 // mod gbz: GBZ
 

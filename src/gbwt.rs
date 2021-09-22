@@ -431,7 +431,7 @@ impl Serialize for GBWT {
 ///
 /// Because `SearchState` contains a [`Range`], it does not implement [`Copy`].
 /// As search states are often reused, they are passed by reference instead of value.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SearchState {
     /// GBWT node identifier for the last matched node.
     pub node: usize,
@@ -461,7 +461,7 @@ impl SearchState {
 ///
 /// Because `BidirectionalState` contains a [`Range`], it does not implement [`Copy`].
 /// As search states are often reused, they are passed by reference instead of value.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BidirectionalState {
     /// GBWT search state for the forward pattern.
     pub forward: SearchState,
@@ -763,7 +763,7 @@ impl Serialize for Metadata {
 /// * Fragment field can be used as a fragment index for fragments from the sequence identified by (sample, contig, phase).
 ///   It can also be used as the starting offset of the fragment in the corresponding reference sequence.
 #[repr(C)]
-#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq)]
 pub struct PathName {
     /// Sample identifier.
     pub sample: u32,

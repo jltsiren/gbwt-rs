@@ -271,7 +271,42 @@ impl Payload for MetadataPayload {
 
 //-----------------------------------------------------------------------------
 
-// TODO GraphHeader
+/// Payload for the GBWTGraph header.
+#[repr(C)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+pub struct GraphPayload {
+    /// Number of nodes in the original graph.
+    pub nodes: usize,
+}
+
+impl GraphPayload {
+    /// The graph contains a node-to-segment translation.
+    pub const FLAG_TRANSLATION: u64 = 0x0001;
+
+    /// The serialized data is in the simple-sds format.
+    pub const FLAG_SIMPLE_SDS: u64  = 0x0002;
+}
+
+impl Payload for GraphPayload {
+    const NAME: &'static str = "GraphHeader";
+    const TAG: u32 = 0x6B3764AF;
+    const VERSION: u32 = 3;
+    const MIN_VERSION: u32 = 3;
+    const DEFAULT_FLAGS: u64 = Self::FLAG_SIMPLE_SDS;
+
+    fn update(&mut self) {}
+
+    fn mask(_: u32) -> u64 {
+        Self::FLAG_TRANSLATION | Self::FLAG_SIMPLE_SDS
+    }
+
+    fn validate(header: &Header<Self>) -> Result<(), String> {
+        if !header.is_set(Self::FLAG_SIMPLE_SDS) {
+            return Err(format!("{}: SDSL format is not supported", Self::NAME));
+        }
+        Ok(())
+    }
+}
 
 //-----------------------------------------------------------------------------
 
@@ -322,6 +357,17 @@ mod tests {
         assert!(!header.is_set(MetadataPayload::FLAG_SAMPLE_NAMES), "Default: Sample name flag is set");
         assert!(!header.is_set(MetadataPayload::FLAG_CONTIG_NAMES), "Default: Contig name flag is set");
         serialize::test(&header, "metadata-header", Some(5), true);
+    }
+
+    #[test]
+    fn graph_header() {
+        let header = Header::<GraphPayload>::new();
+        if let Err(msg) = header.validate() {
+            panic!("{}", msg);
+        }
+        assert!(!header.is_set(GraphPayload::FLAG_TRANSLATION), "Default: Translation flag is set");
+        assert!(header.is_set(GraphPayload::FLAG_SIMPLE_SDS), "Default: Simple-SDS flag is not set");
+        serialize::test(&header, "graph-header", Some(3), true);
     }
 }
 
