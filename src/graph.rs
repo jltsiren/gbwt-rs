@@ -1,11 +1,11 @@
 //! GBWTGraph: Node sequences and node-to-segment translation.
 //!
-//! The [`Graph`] structure augments a GBWT index with node sequences and an optional node-to-segment translation.
+//! The [`Graph`] structure augments a [`crate::GBWT`] index with node sequences and an optional node-to-segment translation.
 //! This enables representing bidirected sequence graphs compatible with a subset of the [GFA format](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md).
 //! Unlike in the [C++ implementation](https://github.com/jltsiren/gbwtgraph), the actual graph interface is provided by the GBZ structure.
 //!
 //! At the moment, this implementation only supports graphs built with other tools.
-// FIXME document, link to GBWT, GBZ
+// FIXME link to GBZ
 
 use crate::headers::{Header, GraphPayload};
 use crate::support::{StringArray, StringIter};
@@ -24,8 +24,7 @@ mod tests;
 
 //-----------------------------------------------------------------------------
 
-// FIXME need new test case for translation
-/// Node sequences and an optional node-to-segment translation for a graph based on a GBWT index.
+/// Node sequences and an optional node-to-segment translation for a graph based on a [`crate::GBWT`] index.
 ///
 /// The graph stores a number of sequences (node labels) with consecutive identifiers starting from `0`.
 /// Sequence identifier `id` corresponds to node identifier `id + min_node` in the original graph, where `min_node` is the smallest node identifier.
@@ -118,7 +117,6 @@ impl Graph {
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// Segments.
 impl Graph {
     /// Returns `true` if the graph contains a node-to-segment translation.
@@ -160,7 +158,7 @@ impl Graph {
     pub fn segment_nodes(&self, id: usize) -> Range<usize> {
         let mut iter = self.mapping.select_iter(id);
         let (_, start) = iter.next().unwrap();
-        let end = if id + 1 < self.segments() { iter.next().unwrap().1 } else { self.sequences() };
+        let end = if id + 1 < self.segments() { iter.next().unwrap().1 } else { self.sequences() + 1 };
         start..end
     }
 
@@ -250,7 +248,10 @@ impl Serialize for Graph {
             if mapping.len() != header.payload().nodes + 1 {
                 return Err(Error::new(ErrorKind::InvalidData, "Graph: Node-to-segment mapping does not match the number of nodes"));
             }
-            if mapping.count_ones() != sequences.len() {
+            if mapping.len() != sequences.len() + 1 {
+                return Err(Error::new(ErrorKind::InvalidData, "Graph: Node-to-segment mapping does not match the number of sequences"));
+            }
+            if mapping.count_ones() != segments.len() {
                 return Err(Error::new(ErrorKind::InvalidData, "Graph: Node-to-segment mapping does not match the number of segments"));
             }
         } else if !segments.is_empty() {
@@ -272,8 +273,27 @@ impl Serialize for Graph {
 
 //-----------------------------------------------------------------------------
 
-// FIXME document, example, tests
-// FIXME item is (name, node range, sequence)
+/// A read-only iterator over the segments in a [`Graph`].
+///
+/// The type of `Item` is `(&[`[`u8`]`], `[`Range`]`<`[`usize`]`>, &[`[`u8`]`])`.
+/// This corresponds to (segment name, node id range, sequence).
+/// If there are gaps in the node id space of the graph, segments corresponding to unused ids may be empty.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::Graph;
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("translation.gg");
+/// let graph: Graph = serialize::load_from(&filename).unwrap();
+///
+/// assert!(graph.has_translation());
+/// let mut iter = graph.segment_iter();
+/// assert_eq!(iter.next(), Some(("s11".as_bytes(), 1..3, "GAT".as_bytes())));
+/// assert_eq!(iter.next(), Some(("s12".as_bytes(), 3..4, "T".as_bytes())));
+/// ```
 #[derive(Clone, Debug)]
 pub struct SegmentIter<'a> {
     parent: &'a Graph,

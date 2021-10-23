@@ -1,0 +1,19 @@
+H	VN:Z:1.0
+S	s11	GAT
+S	s12	T
+S	s13	A
+S	s14	CAG
+S	s15	A
+S	s16	T
+S	s17	TA
+L	s11	+	s12	+	*
+L	s11	+	s13	+	*
+L	s12	+	s14	+	*
+L	s13	+	s14	+	*
+L	s14	+	s15	+	*
+L	s14	+	s16	+	*
+L	s15	+	s17	+	*
+L	s16	+	s17	+	*
+P	A	s11+,s12+,s14+,s15+,s17+	*,*,*,*
+W	sample	1	A	0	10	>s11>s12>s14>s15>s17
+W	sample	2	A	0	10	>s11>s13>s14>s16>s17
