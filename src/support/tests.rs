@@ -44,6 +44,23 @@ fn check_array(array: &StringArray, truth: &[&str]) {
         assert_eq!(array.string(i).unwrap(), truth[i], "Incorrect string {}", i);
     }
 
+    // Access with ranges.
+    for start in 0..=array.len() {
+        let mut expected_len = 0;
+        for end in start..=array.len() {
+            let len = array.range_len(start..end);
+            let bytes = array.range(start..end);
+            if start < end {
+                expected_len += truth[end - 1].len();
+                assert_eq!(len, expected_len, "Invalid slice length for range {}..{}", start, end);
+                assert_eq!(bytes, truth[start..end].concat().as_bytes(), "Invalid slice for range {}..{}", start, end);
+            } else {
+                assert_eq!(len, 0, "Invalid slice length for empty range {}..{}", start, end);
+                assert!(bytes.is_empty(), "Non-empty slice for empty range {}..{}", start, end);
+            }
+        }
+    }
+
     // Iterate forward.
     for (index, bytes) in array.iter().enumerate() {
         assert_eq!(bytes, truth[index].as_bytes(), "Invalid bytes for string {} from iterator (forward)", index);

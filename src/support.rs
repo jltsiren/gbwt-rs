@@ -182,6 +182,15 @@ impl StringArray {
         (self.index.get(i + 1) - self.index.get(i)) as usize
     }
 
+    /// Returns the total length of a range of strings in bytes.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `strings.start > strings.end` or `strings.end > self.len()`.
+    pub fn range_len(&self, strings: Range<usize>) -> usize {
+        (self.index.get(strings.end) - self.index.get(strings.start)) as usize
+    }
+
     /// Returns a byte slice corresponding to the `i`th string.
     ///
     /// # Panics
@@ -190,6 +199,17 @@ impl StringArray {
     pub fn bytes(&self, i: usize) -> &[u8] {
         let start = self.index.get(i) as usize;
         let limit = self.index.get(i + 1) as usize;
+        &self.strings[start..limit]
+    }
+
+    /// Returns a byte slice corresponding to a range of strings.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `strings.start > strings.end` or `strings.end > self.len()`.
+    pub fn range(&self, strings: Range<usize>) -> &[u8] {
+        let start = self.index.get(strings.start) as usize;
+        let limit = self.index.get(strings.end) as usize;
         &self.strings[start..limit]
     }
 
