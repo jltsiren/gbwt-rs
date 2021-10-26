@@ -310,7 +310,29 @@ impl Payload for GraphPayload {
 
 //-----------------------------------------------------------------------------
 
-// TODO GBZHeader
+/// Payload for the GBZ header.
+#[repr(C)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+pub struct GBZPayload {
+}
+
+impl Payload for GBZPayload {
+    const NAME: &'static str = "GBZHeader";
+    const TAG: u32 = 0x205A4247;
+    const VERSION: u32 = 1;
+    const MIN_VERSION: u32 = 1;
+    const DEFAULT_FLAGS: u64 = 0;
+
+    fn update(&mut self) {}
+
+    fn mask(_: u32) -> u64 {
+        0
+    }
+
+    fn validate(_: &Header<Self>) -> Result<(), String> {
+        Ok(())
+    }
+}
 
 //-----------------------------------------------------------------------------
 
@@ -368,6 +390,15 @@ mod tests {
         assert!(!header.is_set(GraphPayload::FLAG_TRANSLATION), "Default: Translation flag is set");
         assert!(header.is_set(GraphPayload::FLAG_SIMPLE_SDS), "Default: Simple-SDS flag is not set");
         serialize::test(&header, "graph-header", Some(3), true);
+    }
+
+    #[test]
+    fn gbz_header() {
+        let header = Header::<GBZPayload>::new();
+        if let Err(msg) = header.validate() {
+            panic!("{}", msg);
+        }
+        serialize::test(&header, "gbz-header", Some(2), true);
     }
 }
 

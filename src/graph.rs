@@ -2,10 +2,9 @@
 //!
 //! The [`Graph`] structure augments a [`crate::GBWT`] index with node sequences and an optional node-to-segment translation.
 //! This enables representing bidirected sequence graphs compatible with a subset of the [GFA format](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md).
-//! Unlike in the [C++ implementation](https://github.com/jltsiren/gbwtgraph), the actual graph interface is provided by the GBZ structure.
+//! Unlike in the [C++ implementation](https://github.com/jltsiren/gbwtgraph), the actual graph interface is provided by the [`crate::GBZ`] structure.
 //!
 //! At the moment, this implementation only supports graphs built with other tools.
-// FIXME link to GBZ
 
 use crate::headers::{Header, GraphPayload};
 use crate::support::{StringArray, StringIter};

@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::Orientation;
+
 use simple_sds::serialize;
 
 use std::collections::HashSet;
@@ -28,6 +30,18 @@ fn statistics() {
         assert!(index.has_node(i), "Index should contain node {}", i);
     }
     assert!(!index.has_node(index.alphabet_size()), "Index contains a node past the end");
+
+    // Node / record if conversions.
+    for node_id in index.first_node()..index.alphabet_size() {
+        let record_id = index.node_to_record(node_id);
+        let converted = index.record_to_node(record_id);
+        assert_eq!(converted, node_id, "Node -> record -> node conversion failed for {}", node_id);
+    }
+    for record_id in 1..index.effective_size() {
+        let node_id = index.record_to_node(record_id);
+        let converted = index.node_to_record(node_id);
+        assert_eq!(converted, record_id, "Record -> node -> record conversion failed for {}", record_id);
+    }
 }
 
 #[test]
@@ -80,12 +94,46 @@ fn extract_backward(index: &GBWT, id: usize) -> Vec<usize> {
 
 fn true_paths() -> Vec<Vec<usize>> {
     vec![
-        vec![support::encode_node(11, false), support::encode_node(12, false), support::encode_node(14, false), support::encode_node(15, false), support::encode_node(17, false)],
-        vec![support::encode_node(21, false), support::encode_node(22, false), support::encode_node(24, false), support::encode_node(25, false)],
-        vec![support::encode_node(11, false), support::encode_node(12, false), support::encode_node(14, false), support::encode_node(15, false), support::encode_node(17, false)],
-        vec![support::encode_node(11, false), support::encode_node(13, false), support::encode_node(14, false), support::encode_node(16, false), support::encode_node(17, false)],
-        vec![support::encode_node(21, false), support::encode_node(22, false), support::encode_node(24, false), support::encode_node(23, true), support::encode_node(21, true)],
-        vec![support::encode_node(21, false), support::encode_node(22, false), support::encode_node(24, false), support::encode_node(25, false)],
+        vec![
+            support::encode_node(11, Orientation::Forward),
+            support::encode_node(12, Orientation::Forward),
+            support::encode_node(14, Orientation::Forward),
+            support::encode_node(15, Orientation::Forward),
+            support::encode_node(17, Orientation::Forward)
+        ],
+        vec![
+            support::encode_node(21, Orientation::Forward),
+            support::encode_node(22, Orientation::Forward),
+            support::encode_node(24, Orientation::Forward),
+            support::encode_node(25, Orientation::Forward)
+        ],
+        vec![
+            support::encode_node(11, Orientation::Forward),
+            support::encode_node(12, Orientation::Forward),
+            support::encode_node(14, Orientation::Forward),
+            support::encode_node(15, Orientation::Forward),
+            support::encode_node(17, Orientation::Forward)
+        ],
+        vec![
+            support::encode_node(11, Orientation::Forward),
+            support::encode_node(13, Orientation::Forward),
+            support::encode_node(14, Orientation::Forward),
+            support::encode_node(16, Orientation::Forward),
+            support::encode_node(17, Orientation::Forward)
+        ],
+        vec![
+            support::encode_node(21, Orientation::Forward),
+            support::encode_node(22, Orientation::Forward), 
+            support::encode_node(24, Orientation::Forward),
+            support::encode_node(23, Orientation::Reverse),
+            support::encode_node(21, Orientation::Reverse)
+        ],
+        vec![
+            support::encode_node(21, Orientation::Forward),
+            support::encode_node(22, Orientation::Forward),
+            support::encode_node(24, Orientation::Forward),
+            support::encode_node(25, Orientation::Forward)
+        ],
     ]
 }
 
@@ -96,9 +144,9 @@ fn extract() {
     let truth = true_paths();
 
     for i in 0..index.sequences() / 2 {
-        let forward = extract_sequence(&index, support::encode_node(i, false));
+        let forward = extract_sequence(&index, support::encode_node(i, Orientation::Forward));
         assert_eq!(forward, truth[i], "Invalid forward path {}", i);
-        let reverse = extract_sequence(&index, support::encode_node(i, true));
+        let reverse = extract_sequence(&index, support::encode_node(i, Orientation::Reverse));
         assert_eq!(reverse.len(), forward.len(), "Invalid reverse path {} length", i);
         for j in 0..reverse.len() {
             let expected = support::flip_node(forward[forward.len() - j - 1]);
@@ -141,8 +189,8 @@ fn true_nodes() -> HashSet<usize> {
     let nodes: Vec<usize> = vec![11, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25];
     let mut result: HashSet<usize> = HashSet::new();
     for node in nodes.iter() {
-        result.insert(support::encode_node(*node, false));
-        result.insert(support::encode_node(*node, true));
+        result.insert(support::encode_node(*node, Orientation::Forward));
+        result.insert(support::encode_node(*node, Orientation::Reverse));
     }
     result
 }

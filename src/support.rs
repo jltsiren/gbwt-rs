@@ -22,6 +22,27 @@ mod tests;
 
 //-----------------------------------------------------------------------------
 
+/// Orientation of a node or a path in a bidirected sequence graph.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub enum Orientation {
+    /// Forward orientation.
+    Forward = 0,
+    /// Reverse or reverse complement orientation.
+    Reverse = 1,
+}
+
+impl Orientation {
+    /// Returns the other orientation.
+    pub fn flip(&self) -> Orientation {
+        match *self {
+            Self::Forward => Self::Reverse,
+            Self::Reverse => Self::Forward,
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
+
 /// Returns the GBWT node identifier corresponding to the given original node and orientation.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
@@ -29,14 +50,14 @@ mod tests;
 /// # Arguments
 ///
 /// * `id`: Identifier of the original node.
-/// * `is_reverse`: Is the original node in reverse orientation.
+/// * `orientation`: Orientation of the node.
 ///
 /// # Panics
 ///
 /// May panic if `id > usize::MAX / 2`.
 #[inline]
-pub fn encode_node(id: usize, is_reverse: bool) -> usize {
-    2 * id + (is_reverse as usize)
+pub fn encode_node(id: usize, orientation: Orientation) -> usize {
+    2 * id + (orientation as usize)
 }
 
 /// Returns the original node identifier corresponding to the given GBWT node.
@@ -47,12 +68,15 @@ pub fn node_id(id: usize) -> usize {
     id / 2
 }
 
-/// Returns `true` if the given GBWT node corresponds to an original node in reverse orientation.
+/// Returns the orientation of the original node corresponding to the given GBWT node.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
 #[inline]
-pub fn node_is_reverse(id: usize) -> bool {
-    id & 1 != 0
+pub fn node_orientation(id: usize) -> Orientation {
+    match id & 1 {
+        0 => Orientation::Forward,
+        _ => Orientation::Reverse,
+    }
 }
 
 /// Returns the GBWT node identifier for the same original node in the other orientation.
@@ -70,14 +94,14 @@ pub fn flip_node(id: usize) -> usize {
 /// # Arguments
 ///
 /// * `id`: Identifier of the path.
-/// * `is_reverse`: Is the path in reverse orientation.
+/// * `orientation`: Orientation of the path.
 ///
 /// # Panics
 ///
 /// May panic if `id > usize::MAX / 2`.
 #[inline]
-pub fn encode_path(id: usize, is_reverse: bool) -> usize {
-    2 * id + (is_reverse as usize)
+pub fn encode_path(id: usize, orientation: Orientation) -> usize {
+    2 * id + (orientation as usize)
 }
 
 /// Returns the path identifier corresponding to the given sequence.
@@ -88,12 +112,15 @@ pub fn path_id(id: usize) -> usize {
     id / 2
 }
 
-/// Returns `true` if the given sequence corresponds to a path in reverse orientation.
+/// Returns the orientation of the path corresponding to the given sequence.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
 #[inline]
-pub fn path_is_reverse(id: usize) -> bool {
-    id & 1 != 0
+pub fn path_orientation(id: usize) -> Orientation {
+    match id & 1 {
+        0 => Orientation::Forward,
+        _ => Orientation::Reverse,
+    }
 }
 
 /// Returns the sequence identifier for the same path in the other orientation.

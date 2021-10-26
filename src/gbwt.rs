@@ -37,13 +37,13 @@ mod tests;
 /// A reverse path visits the other orientation of each node on the path in reverse order.
 /// The following functions can be used for mapping between the identifiers used by the GBWT and the graph:
 ///
-/// * [`support::encode_node`], [`support::flip_node`], [`support::node_id`], and [`support::node_is_reverse`] for node identifiers.
-/// * [`support::encode_path`], [`support::flip_path`], [`support::path_id`], and [`support::path_is_reverse`] for sequence / path identifiers.
+/// * [`support::encode_node`], [`support::flip_node`], [`support::node_id`], and [`support::node_orientation`] for node identifiers.
+/// * [`support::encode_path`], [`support::flip_path`], [`support::path_id`], and [`support::path_orientation`] for sequence / path identifiers.
 ///
 /// # Examples
 ///
 /// ```
-/// use gbwt::{GBWT, SearchState};
+/// use gbwt::{GBWT, SearchState, Orientation};
 /// use gbwt::support;
 /// use simple_sds::serialize;
 ///
@@ -57,28 +57,28 @@ mod tests;
 /// assert!(index.is_bidirectional());
 ///
 /// // Manually find the second-to-last node of path 2 in forward orientation.
-/// let mut pos = index.start(support::encode_path(2, false));
+/// let mut pos = index.start(support::encode_path(2, Orientation::Forward));
 /// let mut last = None;
 /// while pos.is_some() {
 ///     last = pos;
 ///     pos = index.forward(pos.unwrap());
 /// }
 /// let (node, _) = index.backward(last.unwrap()).unwrap();
-/// assert_eq!(node, support::encode_node(15, false));
+/// assert_eq!(node, support::encode_node(15, Orientation::Forward));
 ///
 /// // Search for subpath (12, forward), (14, forward), (15, forward).
-/// let state = index.find(support::encode_node(12, false)).unwrap();
-/// let state = index.extend(&state, support::encode_node(14, false)).unwrap();
-/// let state = index.extend(&state, support::encode_node(15, false)).unwrap();
-/// assert_eq!(state.node, support::encode_node(15, false));
+/// let state = index.find(support::encode_node(12, Orientation::Forward)).unwrap();
+/// let state = index.extend(&state, support::encode_node(14, Orientation::Forward)).unwrap();
+/// let state = index.extend(&state, support::encode_node(15, Orientation::Forward)).unwrap();
+/// assert_eq!(state.node, support::encode_node(15, Orientation::Forward));
 /// assert_eq!(state.len(), 2);
 ///
 /// // Bidirectional search for the same subpath.
-/// let state = index.bd_find(support::encode_node(14, false)).unwrap();
-/// let state = index.extend_backward(&state, support::encode_node(12, false)).unwrap();
-/// let state = index.extend_forward(&state, support::encode_node(15, false)).unwrap();
-/// assert_eq!(state.forward.node, support::encode_node(15, false));
-/// assert_eq!(state.reverse.node, support::encode_node(12, true));
+/// let state = index.bd_find(support::encode_node(14, Orientation::Forward)).unwrap();
+/// let state = index.extend_backward(&state, support::encode_node(12, Orientation::Forward)).unwrap();
+/// let state = index.extend_forward(&state, support::encode_node(15, Orientation::Forward)).unwrap();
+/// assert_eq!(state.forward.node, support::encode_node(15, Orientation::Forward));
+/// assert_eq!(state.reverse.node, support::encode_node(12, Orientation::Reverse));
 /// assert_eq!(state.len(), 2);
 ///
 /// // Metadata.
@@ -141,10 +141,20 @@ impl GBWT {
         self.alphabet_offset() + 1
     }
 
-    // Converts node id to record id.
+    /// Converts node id to record id.
+    ///
+    /// The record id is valid if `self.has_node(node_id)`.
     #[inline]
-    fn node_to_record(&self, i: usize) -> usize {
-        i - self.alphabet_offset()
+    pub fn node_to_record(&self, node_id: usize) -> usize {
+        node_id - self.alphabet_offset()
+    }
+
+    /// Converts record id to node id.
+    ///
+    /// The node id is valid if `record_id != ENDMARKER` and `record_id < self.effective_size()`.
+    #[inline]
+    pub fn record_to_node(&self, record_id: usize) -> usize {
+        record_id + self.alphabet_offset()
     }
 
     /// Returns `true` if node identifier `id` is in the effective alphabet.
@@ -170,6 +180,12 @@ impl GBWT {
     /// Returns a reference to the metadata, or [`None`] if there is no metadata.
     pub fn metadata(&self) -> Option<&Metadata> {
         self.metadata.as_ref()
+    }
+}
+
+impl AsRef<BWT> for GBWT {
+    fn as_ref(&self) -> &BWT {
+        &self.bwt
     }
 }
 
@@ -500,7 +516,7 @@ impl BidirectionalState {
 /// # Examples
 ///
 /// ```
-/// use gbwt::GBWT;
+/// use gbwt::{GBWT, Orientation};
 /// use gbwt::support;
 /// use simple_sds::serialize;
 ///
@@ -508,7 +524,7 @@ impl BidirectionalState {
 /// let index: GBWT = serialize::load_from(&filename).unwrap();
 ///
 /// // Extract path 3 in reverse orientation.
-/// let path: Vec<usize> = index.sequence(support::encode_path(3, true)).collect();
+/// let path: Vec<usize> = index.sequence(support::encode_path(3, Orientation::Reverse)).collect();
 /// assert_eq!(path, vec![35, 33, 29, 27, 23]);
 /// ```
 #[derive(Clone, Debug)]
