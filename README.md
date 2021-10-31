@@ -16,7 +16,9 @@ It is based on the [Simple-SDS](https://github.com/jltsiren/simple-sds) library.
 
 ### GBWTGraph / GBZ
 
-- [ ] Simple-SDS [file format](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md)
+- [x] Simple-SDS [file format](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md)
+- [x] Iteration over nodes and edges
+- [ ] Iteration over segments and links
 - [ ] GFA extraction
 
 ### Possible future additions

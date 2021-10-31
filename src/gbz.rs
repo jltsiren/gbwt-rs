@@ -4,17 +4,19 @@
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
 use crate::{Graph, GBWT, Orientation};
 use crate::bwt::Record;
+use crate::graph::SegmentIter as GraphSegmentIter;
 use crate::headers::{Header, GBZPayload};
 use crate::support::Tags;
 use crate::support;
 
-use simple_sds::bit_vector::BitVector;
-use simple_sds::ops::BitVec;
+use simple_sds::bit_vector::{BitVector, OneIter, Identity};
+use simple_sds::ops::{BitVec, Select};
 use simple_sds::raw_vector::{RawVector, AccessRaw};
 use simple_sds::serialize::Serialize;
 
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
+use std::ops::Range;
 use std::io;
 
 // FIXME
@@ -63,20 +65,34 @@ impl GBZ {
     #[inline]
     pub fn has_node(&self, node_id: usize) -> bool {
         let gbwt_node = support::encode_node(node_id, Orientation::Forward);
-        self.index.has_node(gbwt_node) && self.real_nodes.get(Self::node_to_sequence(&self.index, gbwt_node))
+        self.index.has_node(gbwt_node) && self.real_nodes.get(Self::gbwt_node_to_sequence(&self.index, gbwt_node))
     }
 
-    // Converts a GBWT node id to a sequence id in the graph.
+    // Converts a GBWT node id to a sequence id.
     #[inline]
-    fn node_to_sequence(index: &GBWT, gbwt_node: usize) -> usize {
+    fn gbwt_node_to_sequence(index: &GBWT, gbwt_node: usize) -> usize {
         (gbwt_node - index.first_node()) / 2
+    }
+
+    // Converts a sequence id to a node id in the original graph.
+    #[inline]
+    fn sequence_to_graph_node(&self, sequence_id: usize) -> usize {
+        support::node_id(sequence_id * 2 + self.index.first_node())
     }
 }
 
-// FIXME tests
+// FIXME iterator similar to follow_paths() in the C++ version?
 /// Nodes and edges.
 impl GBZ {
-    // FIXME iterator over nodes
+    /// Returns an iterator over the node identifiers in the original graph.
+    ///
+    /// See [`NodeIter`] for an example.
+    pub fn node_iter(&self) -> NodeIter {
+        NodeIter {
+            parent: &self,
+            iter: self.real_nodes.one_iter()
+        }
+    }
 
     /// Returns an iterator over the successors of a node, or [`None`] if there is no such node.
     ///
@@ -135,6 +151,32 @@ impl GBZ {
 
 //-----------------------------------------------------------------------------
 
+// FIXME need some kind of mapping from node id to (segment id, node id range)
+/// Segments and links.
+impl GBZ {
+    /// Returns `true` if the graph contains a node-to-segment translation.
+    #[inline]
+    pub fn has_translation(&self) -> bool {
+        self.graph.has_translation()
+    }
+
+    /// Returns an iterator over the segments in the GFA graph, or [`None`] if there is no node-to-segment translation.
+    ///
+    /// See [`SegmentIter`] for an example.
+    pub fn segment_iter(&self) -> Option<SegmentIter> {
+        if self.has_translation() {
+            Some(SegmentIter {
+                parent: self,
+                iter: self.graph.segment_iter(),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
+
 // FIXME tests
 impl Serialize for GBZ {
     fn serialize_header<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
@@ -176,7 +218,7 @@ impl Serialize for GBZ {
             }
             let gbwt_node = index.record_to_node(record_id);
             if support::node_orientation(gbwt_node) == Orientation::Forward {
-                real_nodes.set_bit(Self::node_to_sequence(&index, gbwt_node), true);
+                real_nodes.set_bit(Self::gbwt_node_to_sequence(&index, gbwt_node), true);
             }
         }
 
@@ -210,7 +252,52 @@ impl AsRef<Graph> for GBZ {
 
 //-----------------------------------------------------------------------------
 
-// FIXME node iterator
+// FIXME tests
+/// An iterator over the node identifiers in the original graph.
+///
+/// Because the GBZ stores a subgraph induced by the paths, nodes that are not visited by any path will be skipped.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::GBZ;
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("example.gbz");
+/// let gbz: GBZ = serialize::load_from(&filename).unwrap();
+///
+/// let nodes: Vec<usize> = gbz.node_iter().collect();
+/// assert_eq!(nodes, vec![11, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25]);
+/// ```
+#[derive(Clone, Debug)]
+pub struct NodeIter<'a> {
+    parent: &'a GBZ,
+    iter: OneIter<'a, Identity>,
+}
+
+impl<'a> Iterator for NodeIter<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(_, id)| self.parent.sequence_to_graph_node(id))
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a> DoubleEndedIterator for NodeIter<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back().map(|(_, id)| self.parent.sequence_to_graph_node(id))
+    }
+}
+
+impl<'a> ExactSizeIterator for NodeIter<'a> {}
+
+impl<'a> FusedIterator for NodeIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
@@ -305,6 +392,67 @@ impl<'a> FusedIterator for EdgeIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME segment/link iterators?
+// FIXME tests; need to test skipping over unused segments
+/// A read-only iterator over the segments in the GFA graph.
+///
+/// The type of `Item` is `(&[`[`u8`]`], `[`Range`]`<`[`usize`]`>, &[`[`u8`]`])`.
+/// This corresponds to (segment name, node id range, sequence).
+/// Unlike [`crate::graph::SegmentIter`], this iterator will skip segments corresponding to unused node ids.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::GBZ;
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("translation.gbz");
+/// let gbz: GBZ = serialize::load_from(&filename).unwrap();
+///
+/// assert!(gbz.has_translation());
+/// let mut iter = gbz.segment_iter().unwrap();
+/// assert_eq!(iter.next(), Some(("s11".as_bytes(), 1..3, "GAT".as_bytes())));
+/// assert_eq!(iter.next(), Some(("s12".as_bytes(), 3..4, "T".as_bytes())));
+/// ```
+#[derive(Clone, Debug)]
+pub struct SegmentIter<'a> {
+    parent: &'a GBZ,
+    iter: GraphSegmentIter<'a>,
+}
+
+impl<'a> Iterator for SegmentIter<'a> {
+    type Item = (&'a [u8], Range<usize>, &'a [u8]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((name, range, sequence)) = self.iter.next() {
+            if self.parent.has_node(range.start) {
+                return Some((name, range, sequence));
+            }
+        }
+        None
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.iter.len()))
+    }
+}
+
+impl<'a> DoubleEndedIterator for SegmentIter<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        while let Some((name, range, sequence)) = self.iter.next_back() {
+            if self.parent.has_node(range.start) {
+                return Some((name, range, sequence));
+            }
+        }
+        None
+    }
+}
+
+impl<'a> FusedIterator for SegmentIter<'a> {}
+
+//-----------------------------------------------------------------------------
+
+// FIXME LinkIter?
 
 //-----------------------------------------------------------------------------
