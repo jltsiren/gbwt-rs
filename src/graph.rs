@@ -35,6 +35,8 @@ mod tests;
 ///
 /// # Examples
 ///
+/// ## Sequences
+///
 /// ```
 /// use gbwt::Graph;
 /// use gbwt::support;
@@ -50,6 +52,28 @@ mod tests;
 ///
 /// let labels: Vec<&[u8]> = graph.iter().collect();
 /// assert_eq!(labels.concat(), "GATTACAGATTA".as_bytes());
+/// ```
+///
+/// ## Segments
+///
+/// ```
+/// use gbwt::{Graph, Segment};
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("translation.gg");
+/// let graph: Graph = serialize::load_from(&filename).unwrap();
+///
+/// assert!(graph.has_translation());
+/// assert_eq!(graph.segments(), 7);
+///
+/// let first = Segment::from_fields(0, "s11".as_bytes(), 1..3, "GAT".as_bytes());
+/// assert_eq!(graph.segment(0), first);
+/// let last = Segment::from_fields(6, "s17".as_bytes(), 9..10, "TA".as_bytes());
+/// assert_eq!(graph.segment_name(6), last.name);
+/// assert_eq!(graph.segment_nodes(6), last.nodes);
+/// assert_eq!(graph.segment_sequence(6), last.sequence);
+/// assert_eq!(graph.segment_len(6), last.sequence.len());
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Graph {
@@ -131,6 +155,20 @@ impl Graph {
     #[inline]
     pub fn segments(&self) -> usize {
         self.segments.len()
+    }
+
+    /// Returns the segment with the given identifier.
+    ///
+    /// Note that random access to the node-to-segment translation is somewhat slow.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `id >= self.segments()`.
+    pub fn segment(&self, id: usize) -> Segment {
+        let name = self.segment_name(id);
+        let nodes = self.segment_nodes(id);
+        let sequence = self.sequences.range(nodes.start - 1..nodes.end - 1);
+        Segment::from_fields(id, name, nodes, sequence)
     }
 
     /// Returns the name of the segment with the given identifier.
@@ -272,16 +310,49 @@ impl Serialize for Graph {
 
 //-----------------------------------------------------------------------------
 
+/// A segment in a GFA graph.
+///
+/// A segment has an integer identifier, a string name, and a stored sequence.
+/// It segment corresponds to a concatenation of nodes with consecutive identifiers in the original graph.
+/// The name and the sequence are assumed to be valid UTF-8, but this is not checked for performance reasons.
+/// If the nodes are not used on any path in the original graph, the name and the sequence may be empty.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Segment<'a> {
+    /// Identifier of the segment.
+    pub id: usize,
+    /// Name of the segment.
+    pub name: &'a [u8],
+    /// The corresponding range of node ids in the original graph.
+    pub nodes: Range<usize>,
+    /// Sequence corresponding to the segment.
+    pub sequence: &'a [u8],
+}
+
+impl<'a> Segment<'a> {
+    /// Builds a segment from the given fields.
+    ///
+    /// Arguments corresponds to the fields with the same name.
+    pub fn from_fields(id: usize, name: &'a [u8], nodes: Range<usize>, sequence: &'a [u8]) -> Self {
+        Segment {
+            id: id,
+            name: name,
+            nodes: nodes,
+            sequence: sequence,
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
+
 /// A read-only iterator over the segments in a [`Graph`].
 ///
-/// The type of `Item` is `(&[`[`u8`]`], `[`Range`]`<`[`usize`]`>, &[`[`u8`]`])`.
-/// This corresponds to (segment name, node id range, sequence).
+/// The type of `Item` is [`Segment`].
 /// If there are gaps in the node id space of the graph, segments corresponding to unused ids may be empty.
 ///
 /// # Examples
 ///
 /// ```
-/// use gbwt::Graph;
+/// use gbwt::{Graph, Segment};
 /// use gbwt::support;
 /// use simple_sds::serialize;
 ///
@@ -290,8 +361,10 @@ impl Serialize for Graph {
 ///
 /// assert!(graph.has_translation());
 /// let mut iter = graph.segment_iter();
-/// assert_eq!(iter.next(), Some(("s11".as_bytes(), 1..3, "GAT".as_bytes())));
-/// assert_eq!(iter.next(), Some(("s12".as_bytes(), 3..4, "T".as_bytes())));
+/// let first = Segment::from_fields(0, "s11".as_bytes(), 1..3, "GAT".as_bytes());
+/// assert_eq!(iter.next(), Some(first));
+/// let last = Segment::from_fields(6, "s17".as_bytes(), 9..10, "TA".as_bytes());
+/// assert_eq!(iter.next_back(), Some(last));
 /// ```
 #[derive(Clone, Debug)]
 pub struct SegmentIter<'a> {
@@ -305,19 +378,20 @@ pub struct SegmentIter<'a> {
 }
 
 impl<'a> Iterator for SegmentIter<'a> {
-    type Item = (&'a [u8], Range<usize>, &'a [u8]);
+    type Item = Segment<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.next.0 >= self.limit.0 {
             None
         } else {
-            let name = self.parent.segments.bytes(self.next.0);
+            let id = self.next.0;
             self.next.0 += 1;
+            let name = self.parent.segments.bytes(id);
             let prev = self.next.1;
             self.next.1 = if let Some((_, value)) = self.iter.next() { value } else { self.limit.1 };
             // Translate node range to sequence range.
             let sequence = self.parent.sequences.range(prev - 1..self.next.1 - 1);
-            Some((name, prev..self.next.1, sequence))
+            Some(Segment::from_fields(id, name, prev..self.next.1, sequence))
         }
     }
 
@@ -334,12 +408,13 @@ impl<'a> DoubleEndedIterator for SegmentIter<'a> {
             None
         } else {
             self.limit.0 -= 1;
-            let name = self.parent.segments.bytes(self.limit.0);
+            let id = self.limit.0;
+            let name = self.parent.segments.bytes(id);
             let old_node_limit = self.limit.1;
             self.limit.1 = if let Some((_, value)) = self.iter.next_back() { value } else { self.next.1 };
             // Translate node range to sequence range.
             let sequence = self.parent.sequences.range(self.limit.1 - 1..old_node_limit - 1);
-            Some((name, self.limit.1..old_node_limit, sequence))
+            Some(Segment::from_fields(id, name, self.limit.1..old_node_limit, sequence))
         }
     }
 }

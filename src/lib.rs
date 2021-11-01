@@ -25,7 +25,7 @@ pub mod support;
 
 pub use crate::gbwt::{GBWT, SearchState, BidirectionalState, Metadata, PathName};
 pub use crate::gbz::GBZ;
-pub use crate::graph::Graph;
+pub use crate::graph::{Graph, Segment};
 pub use crate::support::Orientation;
 
 //-----------------------------------------------------------------------------

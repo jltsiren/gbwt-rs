@@ -2,7 +2,7 @@
 // FIXME document
 
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
-use crate::{Graph, GBWT, Orientation};
+use crate::{Graph, Segment, GBWT, Orientation};
 use crate::bwt::Record;
 use crate::graph::SegmentIter as GraphSegmentIter;
 use crate::headers::{Header, GBZPayload};
@@ -16,7 +16,6 @@ use simple_sds::serialize::Serialize;
 
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
-use std::ops::Range;
 use std::io;
 
 // FIXME
@@ -25,7 +24,7 @@ use std::io;
 
 //-----------------------------------------------------------------------------
 
-// FIXME note: node identifiers in the original graph vs in the GBWT; missing nodes
+// FIXME note: node identifiers in the graph vs in the GBWT; missing nodes
 // FIXME document, example, tests
 /// GBZ file format for storing GFA graphs with many paths.
 ///
@@ -40,6 +39,10 @@ use std::io;
 /// let gbz: GBZ = serialize::load_from(&filename).unwrap();
 ///
 /// assert_eq!(gbz.nodes(), 12);
+///
+/// assert!(gbz.has_node(13));
+/// assert_eq!(gbz.sequence(13).unwrap(), "T".as_bytes());
+/// assert_eq!(gbz.sequence_len(13), Some(1));
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GBZ {
@@ -52,20 +55,13 @@ pub struct GBZ {
 
 //-----------------------------------------------------------------------------
 
-// FIXME example, tests
-/// Statistics.
+// Private utilities.
 impl GBZ {
-    /// Returns the number of nodes in the graph.
+    // Converts a node id in the original graph to a sequence id.
     #[inline]
-    pub fn nodes(&self) -> usize {
-        self.graph.nodes()
-    }
-
-    /// Returns `true` if the graph contains a node with identifier `node_id`.
-    #[inline]
-    pub fn has_node(&self, node_id: usize) -> bool {
+    fn graph_node_to_sequence(&self, node_id: usize) -> usize {
         let gbwt_node = support::encode_node(node_id, Orientation::Forward);
-        self.index.has_node(gbwt_node) && self.real_nodes.get(Self::gbwt_node_to_sequence(&self.index, gbwt_node))
+        Self::gbwt_node_to_sequence(&self.index, gbwt_node)
     }
 
     // Converts a GBWT node id to a sequence id.
@@ -82,8 +78,40 @@ impl GBZ {
 }
 
 // FIXME iterator similar to follow_paths() in the C++ version?
+// FIXME tests
 /// Nodes and edges.
 impl GBZ {
+    /// Returns the number of nodes in the graph.
+    #[inline]
+    pub fn nodes(&self) -> usize {
+        self.graph.nodes()
+    }
+
+    /// Returns `true` if the original graph contains a node with identifier `node_id`.
+    #[inline]
+    pub fn has_node(&self, node_id: usize) -> bool {
+        let gbwt_node = support::encode_node(node_id, Orientation::Forward);
+        self.index.has_node(gbwt_node) && self.real_nodes.get(Self::gbwt_node_to_sequence(&self.index, gbwt_node))
+    }
+
+    /// Returns the sequence for the node in the original graph, or [`None`] if there is no such node.
+    pub fn sequence(&self, node_id: usize) -> Option<&[u8]> {
+        if !self.has_node(node_id) {
+            return None;
+        }
+        let sequence_id = self.graph_node_to_sequence(node_id);
+        Some(self.graph.sequence(sequence_id))
+    }
+
+    /// Returns the length of the sequence for the node in the original graph, or [`None`] if there is no such node.
+    pub fn sequence_len(&self, node_id: usize) -> Option<usize> {
+        if !self.has_node(node_id) {
+            return None;
+        }
+        let sequence_id = self.graph_node_to_sequence(node_id);
+        Some(self.graph.sequence_len(sequence_id))
+    }
+
     /// Returns an iterator over the node identifiers in the original graph.
     ///
     /// See [`NodeIter`] for an example.
@@ -151,7 +179,9 @@ impl GBZ {
 
 //-----------------------------------------------------------------------------
 
-// FIXME need some kind of mapping from node id to (segment id, node id range)
+// FIXME node id -> segment id
+// FIXME segment id -> segment; segment id -> segment length
+// FIXME tests
 /// Segments and links.
 impl GBZ {
     /// Returns `true` if the graph contains a node-to-segment translation.
@@ -395,14 +425,13 @@ impl<'a> FusedIterator for EdgeIter<'a> {}
 // FIXME tests; need to test skipping over unused segments
 /// A read-only iterator over the segments in the GFA graph.
 ///
-/// The type of `Item` is `(&[`[`u8`]`], `[`Range`]`<`[`usize`]`>, &[`[`u8`]`])`.
-/// This corresponds to (segment name, node id range, sequence).
+/// The type of `Item` is [`Segment`].
 /// Unlike [`crate::graph::SegmentIter`], this iterator will skip segments corresponding to unused node ids.
 ///
 /// # Examples
 ///
 /// ```
-/// use gbwt::GBZ;
+/// use gbwt::{GBZ, Segment};
 /// use gbwt::support;
 /// use simple_sds::serialize;
 ///
@@ -411,8 +440,10 @@ impl<'a> FusedIterator for EdgeIter<'a> {}
 ///
 /// assert!(gbz.has_translation());
 /// let mut iter = gbz.segment_iter().unwrap();
-/// assert_eq!(iter.next(), Some(("s11".as_bytes(), 1..3, "GAT".as_bytes())));
-/// assert_eq!(iter.next(), Some(("s12".as_bytes(), 3..4, "T".as_bytes())));
+/// let first = Segment::from_fields(0, "s11".as_bytes(), 1..3, "GAT".as_bytes());
+/// assert_eq!(iter.next(), Some(first));
+/// let last = Segment::from_fields(6, "s17".as_bytes(), 9..10, "TA".as_bytes());
+/// assert_eq!(iter.next_back(), Some(last));
 /// ```
 #[derive(Clone, Debug)]
 pub struct SegmentIter<'a> {
@@ -421,12 +452,12 @@ pub struct SegmentIter<'a> {
 }
 
 impl<'a> Iterator for SegmentIter<'a> {
-    type Item = (&'a [u8], Range<usize>, &'a [u8]);
+    type Item = Segment<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some((name, range, sequence)) = self.iter.next() {
-            if self.parent.has_node(range.start) {
-                return Some((name, range, sequence));
+        while let Some(segment) = self.iter.next() {
+            if self.parent.has_node(segment.nodes.start) {
+                return Some(segment);
             }
         }
         None
@@ -440,9 +471,9 @@ impl<'a> Iterator for SegmentIter<'a> {
 
 impl<'a> DoubleEndedIterator for SegmentIter<'a> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        while let Some((name, range, sequence)) = self.iter.next_back() {
-            if self.parent.has_node(range.start) {
-                return Some((name, range, sequence));
+        while let Some(segment) = self.iter.next_back() {
+            if self.parent.has_node(segment.nodes.start) {
+                return Some(segment);
             }
         }
         None
