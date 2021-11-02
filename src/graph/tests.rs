@@ -101,6 +101,9 @@ fn translation() {
 
     for i in 0..graph.segments() {
         assert_eq!(graph.segment(i), truth[i], "Invalid segment {}", i);
+        for j in truth[i].nodes.clone() {
+            assert_eq!(graph.node_to_segment(j), truth[i], "Invalid segment for node {}", j);
+        }
         assert_eq!(graph.segment_name(i), truth[i].name, "Invalid name for segment {}", i);
         assert_eq!(graph.segment_nodes(i), truth[i].nodes, "Invalid node range for segment {}", i);
         assert_eq!(graph.segment_sequence(i), truth[i].sequence, "Invalid sequence for segment {}", i);

@@ -9,7 +9,7 @@
 use crate::headers::{Header, GraphPayload};
 use crate::support::{StringArray, StringIter};
 
-use simple_sds::ops::{BitVec, Select};
+use simple_sds::ops::{BitVec, Select, PredSucc};
 use simple_sds::serialize::Serialize;
 use simple_sds::sparse_vector::{SparseVector, OneIter};
 
@@ -69,6 +69,10 @@ mod tests;
 ///
 /// let first = Segment::from_fields(0, "s11".as_bytes(), 1..3, "GAT".as_bytes());
 /// assert_eq!(graph.segment(0), first);
+///
+/// let middle = Segment::from_fields(3, "s14".as_bytes(), 5..7, "CAG".as_bytes());
+/// assert_eq!(graph.node_to_segment(6), middle);
+///
 /// let last = Segment::from_fields(6, "s17".as_bytes(), 9..10, "TA".as_bytes());
 /// assert_eq!(graph.segment_name(6), last.name);
 /// assert_eq!(graph.segment_nodes(6), last.nodes);
@@ -171,6 +175,27 @@ impl Graph {
         Segment::from_fields(id, name, nodes, sequence)
     }
 
+    /// Returns the segment containing node `node_id` of the original graph.
+    ///
+    /// Note that random access to the node-to-segment translation is somewhat slow.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `node_id == 0` or `node_id > self.sequences()` or if there is no node-to-segment translation.
+    pub fn node_to_segment(&self, node_id: usize) -> Segment {
+        let mut iter = self.mapping.predecessor(node_id);
+        let (segment_id, start) = iter.next().unwrap();
+        let end = if let Some((_, value)) = iter.next() { value } else { self.mapping.len() };
+        let name = self.segment_name(segment_id);
+        let sequence = self.sequences.range(start - 1..end - 1);
+        Segment {
+            id: segment_id,
+            name: name,
+            nodes: start..end,
+            sequence: sequence,
+        }
+    }
+
     /// Returns the name of the segment with the given identifier.
     ///
     /// The name is assumed to be valid UTF-8.
@@ -195,7 +220,7 @@ impl Graph {
     pub fn segment_nodes(&self, id: usize) -> Range<usize> {
         let mut iter = self.mapping.select_iter(id);
         let (_, start) = iter.next().unwrap();
-        let end = if id + 1 < self.segments() { iter.next().unwrap().1 } else { self.sequences() + 1 };
+        let end = if let Some((_, value)) = iter.next() { value } else { self.mapping.len() };
         start..end
     }
 

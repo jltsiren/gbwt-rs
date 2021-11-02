@@ -24,11 +24,22 @@ use std::io;
 
 //-----------------------------------------------------------------------------
 
-// FIXME note: node identifiers in the graph vs in the GBWT; missing nodes
-// FIXME document, example, tests
+// FIXME tests
 /// GBZ file format for storing GFA graphs with many paths.
 ///
+/// A GBZ graph combines a [`GBWT`] index and a [`Graph`].
+/// It represents the subgraph of the original graph induced by the paths in the GBWT index.
+/// `GBZ` methods used node identifiers in the original graph.
+/// Functions [`support::encode_node`], [`support::flip_node`], [`support::node_id`], and [`support::node_orientation`] enable conversions between original and GBWT node ids.
+/// While the methods in [`Graph`] may panic or return unpredictable results when the correspondin object does not exist, `GBZ` methods return [`None`] in such cases.
+///
+/// In addition to representing a bidirected sequence graph with integer node ids, a `GBZ` also contains an optional node-to-segment translation.
+/// The translation enables representing a GFA graph, where each segment has a string name and corresponds to the concatenation of a range of nodes.
+/// Nodes and edges refer to those in the original graph, while GFA graphs have segments and links.
+///
 /// # Examples
+///
+/// ## Nodes
 ///
 /// ```
 /// use gbwt::GBZ;
@@ -43,6 +54,22 @@ use std::io;
 /// assert!(gbz.has_node(13));
 /// assert_eq!(gbz.sequence(13).unwrap(), "T".as_bytes());
 /// assert_eq!(gbz.sequence_len(13), Some(1));
+/// ```
+///
+/// ## Segments
+///
+/// ```
+/// use gbwt::{GBZ, Segment};
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("translation.gbz");
+/// let gbz: GBZ = serialize::load_from(&filename).unwrap();
+///
+/// assert!(gbz.has_translation());
+///
+/// let middle = Segment::from_fields(3, "s14".as_bytes(), 5..7, "CAG".as_bytes());
+/// assert_eq!(gbz.node_to_segment(6), Some(middle));
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GBZ {
@@ -131,22 +158,20 @@ impl GBZ {
     /// * `node_id`: Identifier of the node.
     /// * `orientation`: Orientation of the node.
     pub fn successors(&self, node_id: usize, orientation: Orientation) -> Option<EdgeIter> {
-        if node_id == ENDMARKER {
+        if !self.has_node(node_id) {
             return None;
         }
         let gbwt_node = support::encode_node(node_id, orientation);
         let record_id = self.index.node_to_record(gbwt_node);
-        if let Some(record) = self.index.as_ref().record(record_id) {
-            let next = if record.outdegree() > 0 && record.successor(0) == ENDMARKER { 1 } else { 0 };
-            let limit = record.outdegree();
-            return Some(EdgeIter {
-                record: record,
-                next: next,
-                limit: limit,
-                flip: false,
-            });
-        }
-        return None;
+        let record = self.index.as_ref().record(record_id)?;
+        let next = if record.outdegree() > 0 && record.successor(0) == ENDMARKER { 1 } else { 0 };
+        let limit = record.outdegree();
+        Some(EdgeIter {
+            record: record,
+            next: next,
+            limit: limit,
+            flip: false,
+        })
     }
 
     /// Returns an iterator over the predecessors of a node, or [`None`] if there is no such node.
@@ -158,29 +183,25 @@ impl GBZ {
     /// * `node_id`: Identifier of the node.
     /// * `orientation`: Orientation of the node.
     pub fn predecessors(&self, node_id: usize, orientation: Orientation) -> Option<EdgeIter> {
-        if node_id == ENDMARKER {
+        if !self.has_node(node_id) {
             return None;
         }
         let gbwt_node = support::encode_node(node_id, orientation.flip());
         let record_id = self.index.node_to_record(gbwt_node);
-        if let Some(record) = self.index.as_ref().record(record_id) {
-            let next = if record.outdegree() > 0 && record.successor(0) == ENDMARKER { 1 } else { 0 };
-            let limit = record.outdegree();
-            return Some(EdgeIter {
-                record: record,
-                next: next,
-                limit: limit,
-                flip: true,
-            });
-        }
-        return None;
+        let record = self.index.as_ref().record(record_id)?;
+        let next = if record.outdegree() > 0 && record.successor(0) == ENDMARKER { 1 } else { 0 };
+        let limit = record.outdegree();
+        Some(EdgeIter {
+            record: record,
+            next: next,
+            limit: limit,
+            flip: true,
+        })
     }
 }
 
 //-----------------------------------------------------------------------------
 
-// FIXME node id -> segment id
-// FIXME segment id -> segment; segment id -> segment length
 // FIXME tests
 /// Segments and links.
 impl GBZ {
@@ -188,6 +209,18 @@ impl GBZ {
     #[inline]
     pub fn has_translation(&self) -> bool {
         self.graph.has_translation()
+    }
+
+    /// Returns the segment containing node `node_id` of the original graph.
+    ///
+    /// Returns [`None`] if there is no such node or if the graph does not contain a node-to-segment translation.
+    /// Note that random access to the translation is somewhat slow.
+    pub fn node_to_segment(&self, node_id: usize) -> Option<Segment> {
+        if self.has_translation() && self.has_node(node_id) {
+            Some(self.graph.node_to_segment(node_id))
+        } else {
+            None
+        }
     }
 
     /// Returns an iterator over the segments in the GFA graph, or [`None`] if there is no node-to-segment translation.
@@ -202,6 +235,56 @@ impl GBZ {
         } else {
             None
         }
+    }
+
+    /// Returns an iterator over the successors of a segment.
+    ///
+    /// Returns [`None`] if there is no node-to-segment-translation or if the nodes corresponding to the segment do not exist.
+    /// The result is unpredictable if `segment` is not a valid segment.
+    /// See [`LinkIter`] for an example.
+    ///
+    /// # Arguments
+    ///
+    /// * `segment`: A valid segment in the GFA graph.
+    /// * `orientation`: Orientation of the segment.
+    pub fn segment_successors(&self, segment: &Segment, orientation: Orientation) -> Option<LinkIter> {
+        if segment.nodes.is_empty() || !self.has_translation() {
+            return None;
+        }
+        let node_id = match orientation {
+            Orientation::Forward => segment.nodes.end - 1,
+            Orientation::Reverse => segment.nodes.start,
+        };
+        let iter = self.successors(node_id, orientation)?;
+        Some(LinkIter {
+            parent: self,
+            iter: iter,
+        })
+    }
+
+    /// Returns an iterator over the predecessors of a segment.
+    ///
+    /// Returns [`None`] if there is no node-to-segment-translation or if the nodes corresponding to the segment do not exist.
+    /// The result is unpredictable if `segment` is not a valid segment.
+    /// See [`LinkIter`] for an example.
+    ///
+    /// # Arguments
+    ///
+    /// * `segment`: A valid segment in the GFA graph.
+    /// * `orientation`: Orientation of the segment.
+    pub fn segment_predecessors(&self, segment: &Segment, orientation: Orientation) -> Option<LinkIter> {
+        if segment.nodes.is_empty() || !self.has_translation() {
+            return None;
+        }
+        let node_id = match orientation {
+            Orientation::Forward => segment.nodes.start,
+            Orientation::Reverse => segment.nodes.end - 1,
+        };
+        let iter = self.predecessors(node_id, orientation)?;
+        Some(LinkIter {
+            parent: self,
+            iter: iter,
+        })
     }
 }
 
@@ -422,7 +505,7 @@ impl<'a> FusedIterator for EdgeIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests; need to test skipping over unused segments
+// FIXME tests; need to test skipping unused segments
 /// A read-only iterator over the segments in the GFA graph.
 ///
 /// The type of `Item` is [`Segment`].
@@ -484,6 +567,71 @@ impl<'a> FusedIterator for SegmentIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME LinkIter?
+// FIXME tests
+/// An iterator over the predecessors or successors of a segment.
+///
+/// The type of `Item` is `(`[`Segment`]`, `[`Orientation`]`)`.
+/// Values are listed in the same order as by [`EdgeIter`].
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::{GBZ, Segment, Orientation};
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("translation.gbz");
+/// let gbz: GBZ = serialize::load_from(&filename).unwrap();
+///
+/// assert!(gbz.has_translation());
+///
+/// // Successors of segment s14 (nodes `5..7`) in forward orientation.
+/// let s14 = gbz.node_to_segment(5).unwrap();
+/// let mut successors = gbz.segment_successors(&s14, Orientation::Forward).unwrap();
+/// assert_eq!(successors.next().map(|(s, o)| (s.name, o)),
+///     Some(("s15".as_bytes(), Orientation::Forward)));
+/// assert_eq!(successors.next().map(|(s, o)| (s.name, o)),
+///     Some(("s16".as_bytes(), Orientation::Forward)));
+/// assert!(successors.next().is_none());
+///
+/// // Predecessors of segment s11 (nodes `1..3`) in reverse orientation.
+/// let s11 = gbz.node_to_segment(1).unwrap();
+/// let mut predecessors = gbz.segment_predecessors(&s11, Orientation::Reverse).unwrap();
+/// assert_eq!(predecessors.next().map(|(s, o)| (s.name, o)),
+///     Some(("s12".as_bytes(), Orientation::Reverse)));
+/// assert_eq!(predecessors.next().map(|(s, o)| (s.name, o)),
+///     Some(("s13".as_bytes(), Orientation::Reverse)));
+/// assert!(predecessors.next().is_none());
+/// ```
+#[derive(Clone, Debug)]
+pub struct LinkIter<'a> {
+    parent: &'a GBZ,
+    iter: EdgeIter<'a>,
+}
+
+impl<'a> Iterator for LinkIter<'a> {
+    type Item = (Segment<'a>, Orientation);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (node_id, orientation) = self.iter.next()?;
+        self.parent.node_to_segment(node_id).map(|s| (s, orientation))
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a> DoubleEndedIterator for LinkIter<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let (node_id, orientation) = self.iter.next_back()?;
+        self.parent.node_to_segment(node_id).map(|s| (s, orientation))
+    }
+}
+
+impl<'a> ExactSizeIterator for LinkIter<'a> {}
+
+impl<'a> FusedIterator for LinkIter<'a> {}
 
 //-----------------------------------------------------------------------------
