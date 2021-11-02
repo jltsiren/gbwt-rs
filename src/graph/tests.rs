@@ -57,15 +57,15 @@ fn statistics_trans() {
 
     assert_eq!(graph.nodes(), 9, "Invalid number of nodes");
     assert!(!graph.is_empty(), "The graph should not be empty");
-    assert_eq!(graph.sequences(), 9, "Invalid number of sequences");
-    assert_eq!(graph.segments(), 7, "Invalid number of segments");
+    assert_eq!(graph.sequences(), 11, "Invalid number of sequences");
+    assert_eq!(graph.segments(), 8, "Invalid number of segments");
 }
 
 #[test]
 fn sequences_trans() {
     let filename = support::get_test_data("translation.gg");
     let graph: Graph = serialize::load_from(&filename).unwrap();
-    let truth: Vec<&str> = vec!["GA", "T", "T", "A", "CA", "G", "A", "T", "TA"];
+    let truth: Vec<&str> = vec!["GA", "T", "T", "A", "CA", "G", "", "", "A", "T", "TA"];
 
     for i in 0..graph.sequences() {
         assert_eq!(graph.sequence(i), truth[i].as_bytes(), "Invalid sequence {}", i);
@@ -92,9 +92,10 @@ fn translation() {
         Segment::from_fields(1, "s12".as_bytes(), 3..4, "T".as_bytes()),
         Segment::from_fields(2, "s13".as_bytes(), 4..5, "A".as_bytes()),
         Segment::from_fields(3, "s14".as_bytes(), 5..7, "CAG".as_bytes()),
-        Segment::from_fields(4, "s15".as_bytes(), 7..8, "A".as_bytes()),
-        Segment::from_fields(5, "s16".as_bytes(), 8..9, "T".as_bytes()),
-        Segment::from_fields(6, "s17".as_bytes(), 9..10, "TA".as_bytes()),
+        Segment::from_fields(4, "".as_bytes(), 7..9, "".as_bytes()),
+        Segment::from_fields(5, "s15".as_bytes(), 9..10, "A".as_bytes()),
+        Segment::from_fields(6, "s16".as_bytes(), 10..11, "T".as_bytes()),
+        Segment::from_fields(7, "s17".as_bytes(), 11..12, "TA".as_bytes()),
     ];
 
     assert!(graph.has_translation(), "The graph does not contain a node-to-segment translation");

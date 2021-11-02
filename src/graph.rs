@@ -65,7 +65,7 @@ mod tests;
 /// let graph: Graph = serialize::load_from(&filename).unwrap();
 ///
 /// assert!(graph.has_translation());
-/// assert_eq!(graph.segments(), 7);
+/// assert_eq!(graph.segments(), 8);
 ///
 /// let first = Segment::from_fields(0, "s11".as_bytes(), 1..3, "GAT".as_bytes());
 /// assert_eq!(graph.segment(0), first);
@@ -73,11 +73,11 @@ mod tests;
 /// let middle = Segment::from_fields(3, "s14".as_bytes(), 5..7, "CAG".as_bytes());
 /// assert_eq!(graph.node_to_segment(6), middle);
 ///
-/// let last = Segment::from_fields(6, "s17".as_bytes(), 9..10, "TA".as_bytes());
-/// assert_eq!(graph.segment_name(6), last.name);
-/// assert_eq!(graph.segment_nodes(6), last.nodes);
-/// assert_eq!(graph.segment_sequence(6), last.sequence);
-/// assert_eq!(graph.segment_len(6), last.sequence.len());
+/// let last = Segment::from_fields(7, "s17".as_bytes(), 11..12, "TA".as_bytes());
+/// assert_eq!(graph.segment_name(7), last.name);
+/// assert_eq!(graph.segment_nodes(7), last.nodes);
+/// assert_eq!(graph.segment_sequence(7), last.sequence);
+/// assert_eq!(graph.segment_len(7), last.sequence.len());
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Graph {
@@ -307,7 +307,9 @@ impl Serialize for Graph {
 
         let mapping = SparseVector::load(reader)?;
         if header.is_set(GraphPayload::FLAG_TRANSLATION) {
-            if mapping.len() != header.payload().nodes + 1 {
+            // If there are no gaps in the node id space, `mapping.len() == header.payload().nodes + 1`.
+            // Unused nodes create gaps.
+            if mapping.len() <= header.payload().nodes {
                 return Err(Error::new(ErrorKind::InvalidData, "Graph: Node-to-segment mapping does not match the number of nodes"));
             }
             if mapping.len() != sequences.len() + 1 {
@@ -388,7 +390,7 @@ impl<'a> Segment<'a> {
 /// let mut iter = graph.segment_iter();
 /// let first = Segment::from_fields(0, "s11".as_bytes(), 1..3, "GAT".as_bytes());
 /// assert_eq!(iter.next(), Some(first));
-/// let last = Segment::from_fields(6, "s17".as_bytes(), 9..10, "TA".as_bytes());
+/// let last = Segment::from_fields(7, "s17".as_bytes(), 11..12, "TA".as_bytes());
 /// assert_eq!(iter.next_back(), Some(last));
 /// ```
 #[derive(Clone, Debug)]

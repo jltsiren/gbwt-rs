@@ -505,7 +505,7 @@ impl<'a> FusedIterator for EdgeIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests; need to test skipping unused segments
+// FIXME tests
 /// A read-only iterator over the segments in the GFA graph.
 ///
 /// The type of `Item` is [`Segment`].
@@ -525,7 +525,7 @@ impl<'a> FusedIterator for EdgeIter<'a> {}
 /// let mut iter = gbz.segment_iter().unwrap();
 /// let first = Segment::from_fields(0, "s11".as_bytes(), 1..3, "GAT".as_bytes());
 /// assert_eq!(iter.next(), Some(first));
-/// let last = Segment::from_fields(6, "s17".as_bytes(), 9..10, "TA".as_bytes());
+/// let last = Segment::from_fields(7, "s17".as_bytes(), 11..12, "TA".as_bytes());
 /// assert_eq!(iter.next_back(), Some(last));
 /// ```
 #[derive(Clone, Debug)]
