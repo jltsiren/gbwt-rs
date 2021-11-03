@@ -13,7 +13,7 @@ use simple_sds::serialize::Serializable;
 ///
 /// ```
 /// use gbwt::headers::{Header, Payload};
-/// use simple_sds::serialize::{Serialize, Serializable};
+/// use simple_sds::serialize::Serialize;
 ///
 /// #[derive(Copy, Clone, Default, PartialEq, Eq)]
 /// struct Example {
@@ -41,8 +41,6 @@ use simple_sds::serialize::Serializable;
 ///         Ok(())
 ///     }
 /// }
-///
-/// impl Serializable for Example {}
 ///
 /// let mut header = Header::<Example>::default();
 /// assert_eq!(header.size_in_elements(), 3);

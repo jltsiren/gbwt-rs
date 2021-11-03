@@ -28,6 +28,7 @@ fn sequences() {
         assert_eq!(graph.sequence_len(i), truth[i].len(), "Invalid sequence length {}", i);
     }
 
+    assert_eq!(graph.iter().len(), graph.sequences(), "Invalid number of sequences from an iterator");
     assert!(graph.iter().eq(truth.iter().map(|x| x.as_bytes())), "Invalid sequences from an iterator");
 }
 
@@ -80,7 +81,7 @@ fn sequences_trans() {
 fn serialize_trans() {
     let filename = support::get_test_data("translation.gg");
     let graph: Graph = serialize::load_from(&filename).unwrap();
-    serialize::test(&graph, "translation", None, true);
+    serialize::test(&graph, "graph-translation", None, true);
 }
 
 #[test]
@@ -111,8 +112,12 @@ fn translation() {
         assert_eq!(graph.segment_len(i), truth[i].sequence.len(), "Invalid sequence length for segment {}", i);
     }
 
+    // Iterate forward.
     assert_eq!(graph.segment_iter().len(), graph.segments(), "Invalid number of segments from an iterator");
-    assert!(graph.segment_iter().eq(truth.iter().cloned()), "Invalid segments from an iterator");
+    assert!(graph.segment_iter().eq(truth.iter().cloned()), "Invalid segments from an iterator (forward)");
+
+    // Iterate backward.
+    assert!(graph.segment_iter().rev().eq(truth.iter().rev().cloned()), "Invalid segments from an iterator (backward)");
 }
 
 //-----------------------------------------------------------------------------

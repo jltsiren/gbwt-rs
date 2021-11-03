@@ -23,7 +23,7 @@ mod tests;
 //-----------------------------------------------------------------------------
 
 /// Orientation of a node or a path in a bidirected sequence graph.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Orientation {
     /// Forward orientation.
     Forward = 0,

@@ -1,5 +1,10 @@
 //! GBZ: Space-efficient representation for a subset of GFA.
-// FIXME document
+//!
+//! The [`GBZ`] structure combines a [`GBWT`] index and the sequences in a [`Graph`] structure.
+//! It is a space-efficient file format for storing a pangenome graph based on aligned haplotype sequences, with the haplotypes stored as paths.
+//! The format is compatible with a subset of [GFA1](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md).
+//!
+//! See also the [C++ implementation](https://github.com/jltsiren/gbwtgraph) and the [file format specification](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
 
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
 use crate::{Graph, Segment, GBWT, Orientation};
@@ -18,13 +23,11 @@ use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
 use std::io;
 
-// FIXME
-//#[cfg(test)]
-//mod tests;
+#[cfg(test)]
+mod tests;
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// GBZ file format for storing GFA graphs with many paths.
 ///
 /// A GBZ graph combines a [`GBWT`] index and a [`Graph`].
@@ -50,6 +53,8 @@ use std::io;
 /// let gbz: GBZ = serialize::load_from(&filename).unwrap();
 ///
 /// assert_eq!(gbz.nodes(), 12);
+/// assert_eq!(gbz.min_node(), 11);
+/// assert_eq!(gbz.max_node(), 25);
 ///
 /// assert!(gbz.has_node(13));
 /// assert_eq!(gbz.sequence(13).unwrap(), "T".as_bytes());
@@ -105,13 +110,24 @@ impl GBZ {
 }
 
 // FIXME iterator similar to follow_paths() in the C++ version?
-// FIXME tests
 /// Nodes and edges.
 impl GBZ {
     /// Returns the number of nodes in the graph.
     #[inline]
     pub fn nodes(&self) -> usize {
         self.graph.nodes()
+    }
+
+    /// Returns the smallest node identifier in the original graph.
+    #[inline]
+    pub fn min_node(&self) -> usize {
+        support::node_id(self.index.first_node())
+    }
+
+    /// Returns the largest node identifier in the original graph.
+    #[inline]
+    pub fn max_node(&self) -> usize {
+        support::node_id(self.index.alphabet_size()) - 1
     }
 
     /// Returns `true` if the original graph contains a node with identifier `node_id`.
@@ -290,7 +306,6 @@ impl GBZ {
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 impl Serialize for GBZ {
     fn serialize_header<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
         self.header.serialize(writer)
@@ -365,7 +380,6 @@ impl AsRef<Graph> for GBZ {
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// An iterator over the node identifiers in the original graph.
 ///
 /// Because the GBZ stores a subgraph induced by the paths, nodes that are not visited by any path will be skipped.
@@ -414,7 +428,6 @@ impl<'a> FusedIterator for NodeIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// An iterator over the predecessors or successors of a node.
 ///
 /// The type of `Item` is `(`[`usize`]`, `[`Orientation`]`)`.
