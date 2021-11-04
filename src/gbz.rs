@@ -109,7 +109,6 @@ impl GBZ {
     }
 }
 
-// FIXME iterator similar to follow_paths() in the C++ version?
 /// Nodes and edges.
 impl GBZ {
     /// Returns the number of nodes in the graph.
@@ -218,7 +217,6 @@ impl GBZ {
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// Segments and links.
 impl GBZ {
     /// Returns `true` if the graph contains a node-to-segment translation.
@@ -303,6 +301,10 @@ impl GBZ {
         })
     }
 }
+
+//-----------------------------------------------------------------------------
+
+// TODO: paths (path -> iter, segment_path -> iter, follow_forward, follow_backward, metadata)
 
 //-----------------------------------------------------------------------------
 
@@ -518,7 +520,6 @@ impl<'a> FusedIterator for EdgeIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// A read-only iterator over the segments in the GFA graph.
 ///
 /// The type of `Item` is [`Segment`].
@@ -580,7 +581,6 @@ impl<'a> FusedIterator for SegmentIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// An iterator over the predecessors or successors of a segment.
 ///
 /// The type of `Item` is `(`[`Segment`]`, `[`Orientation`]`)`.
