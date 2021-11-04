@@ -79,6 +79,12 @@ pub fn node_orientation(id: usize) -> Orientation {
     }
 }
 
+/// Decodes a GBWT node identifier as a node identifier and orientation in the original graph.
+#[inline]
+pub fn decode_node(id: usize) -> (usize, Orientation) {
+    (node_id(id), node_orientation(id))
+}
+
 /// Returns the GBWT node identifier for the same original node in the other orientation.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
@@ -121,6 +127,12 @@ pub fn path_orientation(id: usize) -> Orientation {
         0 => Orientation::Forward,
         _ => Orientation::Reverse,
     }
+}
+
+/// Decodes a sequence identifier as a path identifier and orientation in the original graph.
+#[inline]
+pub fn decode_path(id: usize) -> (usize, Orientation) {
+    (path_id(id), path_orientation(id))
 }
 
 /// Returns the sequence identifier for the same path in the other orientation.

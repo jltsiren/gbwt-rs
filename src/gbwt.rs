@@ -9,6 +9,7 @@
 //! See also the original [C++ implementation](https://github.com/jltsiren/gbwt).
 
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
+use crate::Orientation;
 use crate::bwt::BWT;
 use crate::headers::{Header, GBWTPayload, MetadataPayload};
 use crate::support::{Dictionary, StringIter, Tags};
@@ -37,8 +38,8 @@ mod tests;
 /// A reverse path visits the other orientation of each node on the path in reverse order.
 /// The following functions can be used for mapping between the identifiers used by the GBWT and the graph:
 ///
-/// * [`support::encode_node`], [`support::flip_node`], [`support::node_id`], and [`support::node_orientation`] for node identifiers.
-/// * [`support::encode_path`], [`support::flip_path`], [`support::path_id`], and [`support::path_orientation`] for sequence / path identifiers.
+/// * [`support::encode_node`], [`support::node_id`], [`support::node_orientation`], [`support::decode_node`], and [`support::flip_node`] for node identifiers.
+/// * [`support::encode_path`], [`support::path_id`], [`support::path_orientation`], [`support::decode_path`], and [`support::flip_path`] for sequence / path identifiers.
 ///
 /// # Examples
 ///
@@ -504,6 +505,22 @@ impl BidirectionalState {
             forward: self.reverse.clone(),
             reverse: self.forward.clone(),
         }
+    }
+
+    /// Returns the first node on the path corresponding to the search state.
+    ///
+    /// The return value consists of a node identifier in the original graph and the orientation of the node.
+    #[inline]
+    pub fn from(&self) -> (usize, Orientation) {
+        support::decode_node(support::flip_node(self.reverse.node))
+    }
+
+    /// Returns the last node on the path corresponding to the search state.
+    ///
+    /// The return value consists of a node identifier in the original graph and the orientation of the node.
+    #[inline]
+    pub fn to(&self) -> (usize, Orientation) {
+        support::decode_node(self.forward.node)
     }
 }
 

@@ -31,7 +31,7 @@ fn statistics() {
     }
     assert!(!index.has_node(index.alphabet_size()), "Index contains a node past the end");
 
-    // Node / record if conversions.
+    // Node / record id conversions.
     for node_id in index.first_node()..index.alphabet_size() {
         let record_id = index.node_to_record(node_id);
         let converted = index.record_to_node(record_id);
