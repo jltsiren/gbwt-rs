@@ -31,13 +31,17 @@
 //! // Determine the length of the BWT by iterating over the records.
 //! let bwt_len = bwt.iter().fold(0, |len, record| len + record.len());
 //! assert_eq!(bwt_len, 17);
+//!
+//! // Collect the record identifiers.
+//! let ids: Vec<usize> = bwt.id_iter().collect();
+//! assert_eq!(ids, vec![0, 1, 2, 3, 4, 5, 6, 7]);
 //! ```
 
 use crate::support::{ByteCodeIter, RLE, RLEIter};
 use crate::ENDMARKER;
 use crate::support;
 
-use simple_sds::sparse_vector::{SparseVector, SparseBuilder};
+use simple_sds::sparse_vector::{SparseVector, SparseBuilder, OneIter};
 use simple_sds::ops::{BitVec, Select};
 use simple_sds::serialize::Serialize;
 
@@ -95,6 +99,15 @@ impl BWT {
     pub fn iter(&self) -> RecordIter {
         RecordIter {
             parent: self,
+            next: 0,
+        }
+    }
+
+    /// Returns an iterator over the identifiers of non-empty records in the BWT.
+    pub fn id_iter(&self) -> IdIter {
+        IdIter {
+            parent: self,
+            iter: self.index.one_iter(),
             next: 0,
         }
     }
@@ -226,6 +239,41 @@ impl<'a> Iterator for RecordIter<'a> {
 }
 
 impl<'a> FusedIterator for RecordIter<'a> {}
+
+//-----------------------------------------------------------------------------
+
+/// An iterator over the identifiers of non-empty records in [`BWT`].
+///
+/// The type of `Item` is [`usize`].
+/// See module-level documentation for an example.
+#[derive(Clone, Debug)]
+pub struct IdIter<'a> {
+    parent: &'a BWT,
+    iter: OneIter<'a>,
+    // The first index we have not visited.
+    next: usize,
+}
+
+impl<'a> Iterator for IdIter<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((node, offset)) = self.iter.next() {
+            self.next = node + 1;
+            if self.parent.data[offset] != 0 {
+                return Some(node);
+            }
+        }
+        None
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.parent.len() - self.next))
+    }
+}
+
+impl<'a> FusedIterator for IdIter<'a> {}
 
 //-----------------------------------------------------------------------------
 

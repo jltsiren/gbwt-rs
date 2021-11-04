@@ -122,9 +122,10 @@ fn check_records(bwt: &BWT, edges: &[Vec<(usize, usize)>]) {
     }
 }
 
-// Check that the iterator finds the correct records.
+// Check that the iterator finds the correct records and that the id iterator finds the same ids.
 fn check_iter(bwt: &BWT) {
     let mut iter = bwt.iter();
+    let mut id_iter = bwt.id_iter();
     for i in 0..bwt.len() {
         if let Some(truth) = bwt.record(i) {
             if let Some(record) = iter.next() {
@@ -132,9 +133,11 @@ fn check_iter(bwt: &BWT) {
             } else {
                 panic!("Iterator did not find record {}", i);
             }
+            assert_eq!(id_iter.next(), Some(truth.id()), "Invalid id from id iterator");
         }
     }
     assert!(iter.next().is_none(), "Iterator found a record past the end");
+    assert!(id_iter.next().is_none(), "Id iterator found a record past the end");
 }
 
 // Check all `lf()` results in the BWT, using the provided edges and runs as the source of truth.

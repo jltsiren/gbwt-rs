@@ -15,17 +15,19 @@
 //!
 //! * See [Simple-SDS](https://github.com/jltsiren/simple-sds) for assumptions on the environment.
 //! * This implementation supports the Simple-SDS file formats for [GBWT](https://github.com/jltsiren/gbwt/blob/master/SERIALIZATION.md) and [GBZ](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
+//! * GBWT / GBZ files written by this library can be identified by `source` tag value `jltsiren/gbwt-rs`.
 
 pub mod bwt;
 pub mod gbwt;
+pub mod gbz;
 pub mod graph;
 pub mod headers;
 pub mod support;
 
 pub use crate::gbwt::{GBWT, SearchState, BidirectionalState, Metadata, PathName};
-pub use crate::graph::Graph;
-
-// mod gbz: GBZ
+pub use crate::gbz::GBZ;
+pub use crate::graph::{Graph, Segment};
+pub use crate::support::Orientation;
 
 //-----------------------------------------------------------------------------
 

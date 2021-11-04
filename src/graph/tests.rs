@@ -25,8 +25,10 @@ fn sequences() {
 
     for i in 0..graph.sequences() {
         assert_eq!(graph.sequence(i), truth[i].as_bytes(), "Invalid sequence {}", i);
+        assert_eq!(graph.sequence_len(i), truth[i].len(), "Invalid sequence length {}", i);
     }
 
+    assert_eq!(graph.iter().len(), graph.sequences(), "Invalid number of sequences from an iterator");
     assert!(graph.iter().eq(truth.iter().map(|x| x.as_bytes())), "Invalid sequences from an iterator");
 }
 
@@ -56,18 +58,19 @@ fn statistics_trans() {
 
     assert_eq!(graph.nodes(), 9, "Invalid number of nodes");
     assert!(!graph.is_empty(), "The graph should not be empty");
-    assert_eq!(graph.sequences(), 9, "Invalid number of sequences");
-    assert_eq!(graph.segments(), 7, "Invalid number of segments");
+    assert_eq!(graph.sequences(), 11, "Invalid number of sequences");
+    assert_eq!(graph.segments(), 8, "Invalid number of segments");
 }
 
 #[test]
 fn sequences_trans() {
     let filename = support::get_test_data("translation.gg");
     let graph: Graph = serialize::load_from(&filename).unwrap();
-    let truth: Vec<&str> = vec!["GA", "T", "T", "A", "CA", "G", "A", "T", "TA"];
+    let truth: Vec<&str> = vec!["GA", "T", "T", "A", "CA", "G", "", "", "A", "T", "TA"];
 
     for i in 0..graph.sequences() {
         assert_eq!(graph.sequence(i), truth[i].as_bytes(), "Invalid sequence {}", i);
+        assert_eq!(graph.sequence_len(i), truth[i].len(), "Invalid sequence length {}", i);
     }
 
     assert_eq!(graph.iter().len(), graph.sequences(), "Invalid number of sequences from an iterator");
@@ -78,33 +81,43 @@ fn sequences_trans() {
 fn serialize_trans() {
     let filename = support::get_test_data("translation.gg");
     let graph: Graph = serialize::load_from(&filename).unwrap();
-    serialize::test(&graph, "translation", None, true);
+    serialize::test(&graph, "graph-translation", None, true);
 }
 
 #[test]
 fn translation() {
     let filename = support::get_test_data("translation.gg");
     let graph: Graph = serialize::load_from(&filename).unwrap();
-    let truth: Vec<(&str, Range<usize>, &str)> = vec![
-        ("s11", 1..3, "GAT"),
-        ("s12", 3..4, "T"),
-        ("s13", 4..5, "A"),
-        ("s14", 5..7, "CAG"),
-        ("s15", 7..8, "A"),
-        ("s16", 8..9, "T"),
-        ("s17", 9..10, "TA"),
+    let truth: Vec<Segment> = vec![
+        Segment::from_fields(0, "s11".as_bytes(), 1..3, "GAT".as_bytes()),
+        Segment::from_fields(1, "s12".as_bytes(), 3..4, "T".as_bytes()),
+        Segment::from_fields(2, "s13".as_bytes(), 4..5, "A".as_bytes()),
+        Segment::from_fields(3, "s14".as_bytes(), 5..7, "CAG".as_bytes()),
+        Segment::from_fields(4, "".as_bytes(), 7..9, "".as_bytes()),
+        Segment::from_fields(5, "s15".as_bytes(), 9..10, "A".as_bytes()),
+        Segment::from_fields(6, "s16".as_bytes(), 10..11, "T".as_bytes()),
+        Segment::from_fields(7, "s17".as_bytes(), 11..12, "TA".as_bytes()),
     ];
 
     assert!(graph.has_translation(), "The graph does not contain a node-to-segment translation");
 
     for i in 0..graph.segments() {
-        assert_eq!(graph.segment_name(i), truth[i].0.as_bytes(), "Invalid name for segment {}", i);
-        assert_eq!(graph.segment_nodes(i), truth[i].1, "Invalid node range for segment {}", i);
-        assert_eq!(graph.segment_sequence(i), truth[i].2.as_bytes(), "Invalid sequence for segment {}", i);
+        assert_eq!(graph.segment(i), truth[i], "Invalid segment {}", i);
+        for j in truth[i].nodes.clone() {
+            assert_eq!(graph.node_to_segment(j), truth[i], "Invalid segment for node {}", j);
+        }
+        assert_eq!(graph.segment_name(i), truth[i].name, "Invalid name for segment {}", i);
+        assert_eq!(graph.segment_nodes(i), truth[i].nodes, "Invalid node range for segment {}", i);
+        assert_eq!(graph.segment_sequence(i), truth[i].sequence, "Invalid sequence for segment {}", i);
+        assert_eq!(graph.segment_len(i), truth[i].sequence.len(), "Invalid sequence length for segment {}", i);
     }
 
+    // Iterate forward.
     assert_eq!(graph.segment_iter().len(), graph.segments(), "Invalid number of segments from an iterator");
-    assert!(graph.segment_iter().eq(truth.iter().map(|(n, r, s)| (n.as_bytes(), r.clone(), s.as_bytes()))), "Invalid segments from an iterator");
+    assert!(graph.segment_iter().eq(truth.iter().cloned()), "Invalid segments from an iterator (forward)");
+
+    // Iterate backward.
+    assert!(graph.segment_iter().rev().eq(truth.iter().rev().cloned()), "Invalid segments from an iterator (backward)");
 }
 
 //-----------------------------------------------------------------------------
