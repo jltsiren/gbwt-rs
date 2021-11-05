@@ -35,7 +35,7 @@ fn check_nodes(gbz: &GBZ, true_nodes: &[(usize, &str)]) {
 
 type Neighbors = BTreeMap<(usize, Orientation), BTreeSet<(usize, Orientation)>>;
 
-fn get_pred_succ<T: Iterator<Item = usize>>(edges: &Vec<(usize, Orientation, usize, Orientation)>, iter: T) -> (Neighbors, Neighbors) {
+fn get_pred_succ<T: Iterator<Item = usize>>(edges: &[(usize, Orientation, usize, Orientation)], iter: T) -> (Neighbors, Neighbors) {
     let mut predecessors: BTreeMap<(usize, Orientation), BTreeSet<(usize, Orientation)>> = BTreeMap::new();
     let mut successors: BTreeMap<(usize, Orientation), BTreeSet<(usize, Orientation)>> = BTreeMap::new();
 
@@ -81,6 +81,21 @@ fn check_pred_succ(gbz: &GBZ, predecessors: &Neighbors, successors: &Neighbors, 
         assert!(gbz.predecessors(node_id, orientation).is_none(), "Found predecessors for non-existent node {} {}", node_id, name);
         assert!(gbz.successors(node_id, orientation).is_none(), "Found successors for non-existent node {} {}", node_id, name);
     }
+}
+
+fn check_paths(gbz: &GBZ, truth: &[Vec<(usize, Orientation)>]) {
+    assert_eq!(gbz.paths(), truth.len(), "Invalid number of paths");
+    for id in 0..gbz.paths() {
+        let iter = gbz.path(id, Orientation::Forward);
+        assert!(iter.is_some(), "Could not get path {} (forward)", id);
+        assert!(iter.unwrap().eq(truth[id].iter().cloned()), "Invalid path {} (forward)", id);
+        let iter = gbz.path(id, Orientation::Reverse);
+        assert!(iter.is_some(), "Could not get path {} (reverse)", id);
+        assert!(iter.unwrap().eq(truth[id].iter().rev().map(|(v, o)| (*v, o.flip()))), "Invalid path {} (reverse)", id);
+    }
+
+    assert!(gbz.path(truth.len(), Orientation::Forward).is_none(), "Got a past-the-end path {} (forward)", truth.len());
+    assert!(gbz.path(truth.len(), Orientation::Reverse).is_none(), "Got a past-the-end path {} (reverse)", truth.len());
 }
 
 //-----------------------------------------------------------------------------
@@ -141,6 +156,22 @@ fn edges() {
             check_pred_succ(&gbz, &predecessors, &successors, node_id, orientation);
         }
     }
+}
+
+#[test]
+fn paths() {
+    let filename = support::get_test_data("example.gbz");
+    let gbz: GBZ = serialize::load_from(&filename).unwrap();
+
+    let paths: Vec<Vec<(usize, Orientation)>> = vec![
+        vec![(11, Orientation::Forward), (12, Orientation::Forward), (14, Orientation::Forward), (15, Orientation::Forward), (17, Orientation::Forward)],
+        vec![(21, Orientation::Forward), (22, Orientation::Forward), (24, Orientation::Forward), (25, Orientation::Forward)],
+        vec![(11, Orientation::Forward), (12, Orientation::Forward), (14, Orientation::Forward), (15, Orientation::Forward), (17, Orientation::Forward)],
+        vec![(11, Orientation::Forward), (13, Orientation::Forward), (14, Orientation::Forward), (16, Orientation::Forward), (17, Orientation::Forward)],
+        vec![(21, Orientation::Forward), (22, Orientation::Forward), (24, Orientation::Forward), (23, Orientation::Reverse), (21, Orientation::Reverse)],
+        vec![(21, Orientation::Forward), (22, Orientation::Forward), (24, Orientation::Forward), (25, Orientation::Forward)],
+    ];
+    check_paths(&gbz, &paths);
 }
 
 #[test]
@@ -210,6 +241,19 @@ fn edges_trans() {
             check_pred_succ(&gbz, &predecessors, &successors, node_id, orientation);
         }
     }
+}
+
+#[test]
+fn paths_trans() {
+    let filename = support::get_test_data("translation.gbz");
+    let gbz: GBZ = serialize::load_from(&filename).unwrap();
+
+    let paths: Vec<Vec<(usize, Orientation)>> = vec![
+        vec![(1, Orientation::Forward), (2, Orientation::Forward), (3, Orientation::Forward), (5, Orientation::Forward), (6, Orientation::Forward), (9, Orientation::Forward), (11, Orientation::Forward)],
+        vec![(1, Orientation::Forward), (2, Orientation::Forward), (3, Orientation::Forward), (5, Orientation::Forward), (6, Orientation::Forward), (9, Orientation::Forward), (11, Orientation::Forward)],
+        vec![(1, Orientation::Forward), (2, Orientation::Forward), (4, Orientation::Forward), (5, Orientation::Forward), (6, Orientation::Forward), (10, Orientation::Forward), (11, Orientation::Forward)],
+    ];
+    check_paths(&gbz, &paths);
 }
 
 #[test]
@@ -287,6 +331,42 @@ fn links() {
         }
     }
 
+}
+
+#[test]
+fn segment_paths() {
+    let filename = support::get_test_data("translation.gbz");
+    let gbz: GBZ = serialize::load_from(&filename).unwrap();
+
+    // Paths as sequences of segment identifiers.
+    let paths: Vec<Vec<(usize, Orientation)>> = vec![
+        vec![(0, Orientation::Forward), (1, Orientation::Forward), (3, Orientation::Forward), (5, Orientation::Forward), (7, Orientation::Forward)],
+        vec![(0, Orientation::Forward), (1, Orientation::Forward), (3, Orientation::Forward), (5, Orientation::Forward), (7, Orientation::Forward)],
+        vec![(0, Orientation::Forward), (2, Orientation::Forward), (3, Orientation::Forward), (6, Orientation::Forward), (7, Orientation::Forward)],
+    ];
+
+    // Check the paths.
+    assert_eq!(gbz.paths(), paths.len(), "Invalid number of paths");
+    for id in 0..gbz.paths() {
+        let iter = gbz.segment_path(id, Orientation::Forward);
+        assert!(iter.is_some(), "Could not get path {} (forward)", id);
+        assert!(iter.unwrap().map(|(s, o)| (s.id, o)).eq(paths[id].iter().cloned()), "Invalid path {} (forward)", id);
+        let iter = gbz.segment_path(id, Orientation::Reverse);
+        assert!(iter.is_some(), "Could not get path {} (reverse)", id);
+        assert!(iter.unwrap().map(|(s, o)| (s.id, o)).eq(paths[id].iter().rev().map(|(v, o)| (*v, o.flip()))), "Invalid path {} (reverse)", id);
+    }
+    assert!(gbz.segment_path(paths.len(), Orientation::Forward).is_none(), "Got a past-the-end path {} (forward)", paths.len());
+    assert!(gbz.segment_path(paths.len(), Orientation::Reverse).is_none(), "Got a past-the-end path {} (reverse)", paths.len());
+
+    // Check the segments on the paths.
+    for id in 0..gbz.paths() {
+        for orientation in [Orientation::Forward, Orientation::Reverse] {
+            let name = if orientation == Orientation::Forward { "(forward)" } else { "(reverse)" };
+            for (s, _) in gbz.segment_path(id, orientation).unwrap() {
+                assert_eq!(s, gbz.graph.segment(s.id), "Invalid segment {} on path {} {}", s.id, id, name);
+            }
+        }
+    }
 }
 
 //-----------------------------------------------------------------------------

@@ -22,6 +22,7 @@ use simple_sds::serialize::Serialize;
 
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
+use std::ops::Range;
 use std::io;
 
 #[cfg(test)]
@@ -42,6 +43,8 @@ mod tests;
 /// Nodes and edges refer to those in the original graph, while GFA graphs have segments and links.
 ///
 /// # Examples
+///
+/// See also: [`NodeIter`], [`EdgeIter`], [`SegmentIter`], [`LinkIter`], [`PathIter`], [`SegmentPathIter`]
 ///
 /// ## Nodes
 ///
@@ -76,6 +79,29 @@ mod tests;
 ///
 /// let middle = Segment::from_fields(3, "s14".as_bytes(), 5..7, "CAG".as_bytes());
 /// assert_eq!(gbz.node_to_segment(6), Some(middle));
+/// ```
+///
+/// ## Paths
+///
+/// ```
+/// use gbwt::{GBZ, Orientation};
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("example.gbz");
+/// let gbz: GBZ = serialize::load_from(&filename).unwrap();
+///
+/// assert_eq!(gbz.paths(), 6);
+/// let mut iter = gbz.path(3, Orientation::Forward).unwrap();
+/// assert_eq!(iter.next(), Some((11, Orientation::Forward)));
+/// assert_eq!(iter.nth(3), Some((17, Orientation::Forward)));
+/// assert!(iter.next().is_none());
+///
+/// assert!(gbz.has_metadata());
+/// let metadata = gbz.metadata().unwrap();
+/// let path_name = metadata.path(3).unwrap();
+/// assert_eq!(metadata.sample(path_name.sample()), Some("sample"));
+/// assert_eq!(metadata.contig(path_name.contig()), Some("A"));
 /// ```
 ///
 /// # Notes
@@ -309,8 +335,7 @@ impl GBZ {
 
 //-----------------------------------------------------------------------------
 
-// FIXME segment_path -> iter, follow_forward, follow_backward
-// FIXME example, tests
+// FIXME follow_forward, follow_backward
 /// Paths.
 impl GBZ {
     /// Returns the number of paths in the original graph.
@@ -331,6 +356,29 @@ impl GBZ {
         let iter = self.index.sequence(support::encode_path(path_id, orientation))?;
         Some(PathIter {
             iter: iter,
+        })
+    }
+
+    /// Returns an iterator over the segments in the given path.
+    ///
+    /// The return value is [`None`] if there is no such path or there is no node-to-segment translation.
+    /// See [`SegmentPathIter`] for an example.
+    ///
+    /// # Arguments
+    ///
+    /// * `path_id`: Path identifier in the original graph.
+    /// * `orientation`: Orientation of the path.
+    pub fn segment_path(&self, path_id: usize, orientation: Orientation) -> Option<SegmentPathIter> {
+        if !self.has_translation() {
+            return None;
+        }
+        let iter = self.index.sequence(support::encode_path(path_id, orientation))?;
+        Some(SegmentPathIter {
+            parent: self,
+            iter: iter,
+            next: None,
+            nodes: 0..0,
+            fail: false,
         })
     }
 
@@ -688,7 +736,6 @@ impl<'a> FusedIterator for LinkIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME tests
 /// An iterator over an oriented path in the original graph.
 ///
 /// The type of `Item` is `(`[`usize`]`, `[`Orientation`]`)`.
@@ -734,6 +781,112 @@ impl<'a> FusedIterator for PathIter<'a> {}
 
 //-----------------------------------------------------------------------------
 
-// FIXME PathSegmentIter
+/// An iterator over a path as a concatenation of oriented segments.
+///
+/// The type of `Item` is `(`[`Segment`]`, `[`Orientation`]`)`.
+/// If the path is not a valid concatenation of oriented segments, the iterator stops early.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::{GBZ, Orientation};
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("translation.gbz");
+/// let gbz: GBZ = serialize::load_from(&filename).unwrap();
+///
+/// // Path 2 in reverse orientation.
+/// if let Some(mut iter) = gbz.segment_path(2, Orientation::Reverse) {
+///     assert_eq!(iter.next().map(|(s, o)| (s.name, o)),
+///         Some(("s17".as_bytes(), Orientation::Reverse)));
+///     assert_eq!(iter.next().map(|(s, o)| (s.name, o)),
+///         Some(("s16".as_bytes(), Orientation::Reverse)));
+///     assert_eq!(iter.next().map(|(s, o)| (s.name, o)),
+///         Some(("s14".as_bytes(), Orientation::Reverse)));
+///     assert_eq!(iter.next().map(|(s, o)| (s.name, o)),
+///         Some(("s13".as_bytes(), Orientation::Reverse)));
+///     assert_eq!(iter.next().map(|(s, o)| (s.name, o)),
+///         Some(("s11".as_bytes(), Orientation::Reverse)));
+///     assert!(iter.next().is_none());
+/// } else {
+///     panic!("No segment iterator for path 2 (reverse)");
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct SegmentPathIter<'a> {
+    parent: &'a GBZ,
+    iter: SequenceIter<'a>,
+    // Next node visit in the current segment.
+    next: Option<(usize, Orientation)>,
+    // Node range for the last visited segment.
+    nodes: Range<usize>,
+    // The path is not a valid concatenation of segments.
+    fail: bool,
+}
+
+impl<'a> SegmentPathIter<'a> {
+    // Visit a new segment.
+    fn visit(&mut self, nodes: Range<usize>, orientation: Orientation) {
+        match orientation {
+            Orientation::Forward => self.next = Some((nodes.start, orientation)),
+            Orientation::Reverse => self.next = Some((nodes.end - 1, orientation)),
+        }
+        self.nodes = nodes;
+        self.advance();
+    }
+
+    // Advance in the current segment and update `self.next`.
+    fn advance(&mut self) {
+        let (node_id, orientation) = self.next.unwrap();
+        match orientation {
+            Orientation::Forward => {
+                if node_id + 1 < self.nodes.end {
+                    self.next = Some((node_id + 1, orientation));
+                } else {
+                    self.next = None;
+                }
+            },
+            Orientation::Reverse => {
+                if node_id > self.nodes.start {
+                    self.next = Some((node_id - 1, orientation));
+                } else {
+                    self.next = None;
+                }
+            },
+        }
+    }
+}
+
+impl<'a> Iterator for SegmentPathIter<'a> {
+    type Item = (Segment<'a>, Orientation);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.fail {
+            return None;
+        }
+        while let Some(gbwt_node) = self.iter.next() {
+            let (node_id, orientation) = support::decode_node(gbwt_node);
+            if let Some(expected) = self.next {
+                if (node_id, orientation) != expected {
+                    self.fail = true;
+                    return None;
+                }
+                self.advance();
+            } else {
+                if let Some(segment) = self.parent.node_to_segment(node_id) {
+                    self.visit(segment.nodes.clone(), orientation);
+                    return Some((segment, orientation));
+                } else {
+                    self.fail = true;
+                    return None;
+                }
+            }
+        }
+        None
+    }
+}
+
+impl<'a> FusedIterator for SegmentPathIter<'a> {}
 
 //-----------------------------------------------------------------------------
