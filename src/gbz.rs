@@ -9,6 +9,7 @@
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
 use crate::{Graph, Segment, GBWT, Orientation};
 use crate::bwt::Record;
+use crate::gbwt::{SequenceIter, Metadata};
 use crate::graph::SegmentIter as GraphSegmentIter;
 use crate::headers::{Header, GBZPayload};
 use crate::support::Tags;
@@ -76,6 +77,10 @@ mod tests;
 /// let middle = Segment::from_fields(3, "s14".as_bytes(), 5..7, "CAG".as_bytes());
 /// assert_eq!(gbz.node_to_segment(6), Some(middle));
 /// ```
+///
+/// # Notes
+///
+/// * Methods may panic if given path / node identifiers `id > usize::MAX / 2`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GBZ {
     header: Header<GBZPayload>,
@@ -304,7 +309,41 @@ impl GBZ {
 
 //-----------------------------------------------------------------------------
 
-// TODO: paths (path -> iter, segment_path -> iter, follow_forward, follow_backward, metadata)
+// FIXME segment_path -> iter, follow_forward, follow_backward
+// FIXME example, tests
+/// Paths.
+impl GBZ {
+    /// Returns the number of paths in the original graph.
+    #[inline]
+    pub fn paths(&self) -> usize {
+        self.index.sequences() / 2
+    }
+
+    /// Returns an iterator over the given path, or [`None`] if there is no such path.
+    ///
+    /// See [`PathIter`] for an example.
+    ///
+    /// # Arguments
+    ///
+    /// * `path_id`: Path identifier in the original graph.
+    /// * `orientation`: Orientation of the path.
+    pub fn path(&self, path_id: usize, orientation: Orientation) -> Option<PathIter> {
+        let iter = self.index.sequence(support::encode_path(path_id, orientation))?;
+        Some(PathIter {
+            iter: iter,
+        })
+    }
+
+    /// Returns `true` if the GBWT index contains metadata.
+    pub fn has_metadata(&self) -> bool {
+        self.index.has_metadata()
+    }
+
+    /// Returns the metadata stored in the GBWT index, or [`None`] if there is no metadata.
+    pub fn metadata(&self) -> Option<&Metadata> {
+        self.index.metadata()
+    }
+}
 
 //-----------------------------------------------------------------------------
 
@@ -646,5 +685,55 @@ impl<'a> DoubleEndedIterator for LinkIter<'a> {
 impl<'a> ExactSizeIterator for LinkIter<'a> {}
 
 impl<'a> FusedIterator for LinkIter<'a> {}
+
+//-----------------------------------------------------------------------------
+
+// FIXME tests
+/// An iterator over an oriented path in the original graph.
+///
+/// The type of `Item` is `(`[`usize`]`, `[`Orientation`]`)`.
+/// This gives the identifier and the orientation of a node in the original graph.
+/// `PathIter` is a thin wrapper over [`SequenceIter`].
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::{GBZ, Orientation};
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("example.gbz");
+/// let gbz: GBZ = serialize::load_from(&filename).unwrap();
+///
+/// // Path 3 in reverse orientation.
+/// if let Some(mut iter) = gbz.path(3, Orientation::Reverse) {
+///     assert_eq!(iter.next(), Some((17, Orientation::Reverse)));
+///     assert_eq!(iter.next(), Some((16, Orientation::Reverse)));
+///     assert_eq!(iter.next(), Some((14, Orientation::Reverse)));
+///     assert_eq!(iter.next(), Some((13, Orientation::Reverse)));
+///     assert_eq!(iter.next(), Some((11, Orientation::Reverse)));
+///     assert!(iter.next().is_none());
+/// } else {
+///     panic!("No iterator for path 3 (reverse)");
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct PathIter<'a> {
+    iter: SequenceIter<'a>,
+}
+
+impl<'a> Iterator for PathIter<'a> {
+    type Item = (usize, Orientation);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|gbwt_node| support::decode_node(gbwt_node))
+    }
+}
+
+impl<'a> FusedIterator for PathIter<'a> {}
+
+//-----------------------------------------------------------------------------
+
+// FIXME PathSegmentIter
 
 //-----------------------------------------------------------------------------

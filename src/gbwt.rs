@@ -245,14 +245,13 @@ impl GBWT {
         None
     }
 
-    /// Returns an iterator over sequence `id`.
-    ///
-    /// The iterator will be empty if no such sequence exists.
-    pub fn sequence(&self, id: usize) -> SequenceIter {
-        SequenceIter {
+    /// Returns an iterator over sequence `id`, or [`None`] if there is no such sequence.
+    pub fn sequence(&self, id: usize) -> Option<SequenceIter> {
+        let start = self.start(id)?;
+        Some(SequenceIter {
             parent: self,
-            next: self.start(id),
-        }
+            next: Some(start),
+        })
     }
 }
 
@@ -541,7 +540,7 @@ impl BidirectionalState {
 /// let index: GBWT = serialize::load_from(&filename).unwrap();
 ///
 /// // Extract path 3 in reverse orientation.
-/// let path: Vec<usize> = index.sequence(support::encode_path(3, Orientation::Reverse)).collect();
+/// let path: Vec<usize> = index.sequence(support::encode_path(3, Orientation::Reverse)).unwrap().collect();
 /// assert_eq!(path, vec![35, 33, 29, 27, 23]);
 /// ```
 #[derive(Clone, Debug)]

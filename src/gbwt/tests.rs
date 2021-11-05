@@ -178,9 +178,12 @@ fn sequence() {
 
     for i in 0..index.sequences() {
         let extracted = extract_sequence(&index, i);
-        let iterated: Vec<usize> = index.sequence(i).collect();
+        let iter = index.sequence(i);
+        assert!(iter.is_some(), "Could not get an iterator for sequence {}", i);
+        let iterated: Vec<usize> = iter.unwrap().collect();
         assert_eq!(iterated, extracted, "Invalid sequence {} from an iterator", i);
     }
+    assert!(index.sequence(index.sequences()).is_none(), "Got an iterator for a past-the-end sequence id");
 }
 
 //-----------------------------------------------------------------------------
