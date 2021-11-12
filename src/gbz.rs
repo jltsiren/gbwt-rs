@@ -335,7 +335,7 @@ impl GBZ {
 
 //-----------------------------------------------------------------------------
 
-// FIXME follow_forward, follow_backward
+// FIXME follow_forward, follow_backward using EdgeIter and a separate implementation of bidirectional search
 /// Paths.
 impl GBZ {
     /// Returns the number of paths in the original graph.

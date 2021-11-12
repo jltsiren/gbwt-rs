@@ -7,7 +7,7 @@ use std::collections::HashSet;
 //-----------------------------------------------------------------------------
 
 // GBWT example from the paper: (edges, runs, invalid_node)
-fn get_edges_runs() -> (Vec<Vec<(usize, usize)>>, Vec<Vec<(usize, usize)>>, usize) {
+fn get_edges_runs() -> (Vec<Vec<(usize, usize)>>, Vec<Vec<Run>>, usize) {
     let edges = vec![
         vec![(1, 0)],
         vec![(2, 0), (3, 0)],
@@ -19,20 +19,20 @@ fn get_edges_runs() -> (Vec<Vec<(usize, usize)>>, Vec<Vec<(usize, usize)>>, usiz
         vec![(0, 0)],
     ];
     let runs = vec![
-        vec![(0, 3)],
-        vec![(0, 2), (1, 1)],
-        vec![(0, 1), (1, 1)],
-        vec![(0, 1)],
-        vec![(1, 1), (0, 1)],
-        vec![(0, 2)],
-        vec![(0, 1)],
-        vec![(0, 3)],
+        vec![Run::new(0, 3)],
+        vec![Run::new(0, 2), Run::new(1, 1)],
+        vec![Run::new(0, 1), Run::new(1, 1)],
+        vec![Run::new(0, 1)],
+        vec![Run::new(1, 1), Run::new(0, 1)],
+        vec![Run::new(0, 2)],
+        vec![Run::new(0, 1)],
+        vec![Run::new(0, 3)],
     ];
     (edges, runs, 8)
 }
 
 // Bidirectional version of the example: (edges, runs, invalid_node)
-fn get_bidirectional() -> (Vec<Vec<(usize, usize)>>, Vec<Vec<(usize, usize)>>, usize) {
+fn get_bidirectional() -> (Vec<Vec<(usize, usize)>>, Vec<Vec<Run>>, usize) {
     let edges = vec![
         // ENDMARKER
         vec![(2, 0), (15, 0)],
@@ -60,33 +60,33 @@ fn get_bidirectional() -> (Vec<Vec<(usize, usize)>>, Vec<Vec<(usize, usize)>>, u
     ];
     let runs = vec![
         // ENDMARKER
-        vec![(0, 3), (1, 3)],
+        vec![Run::new(0, 3), Run::new(1, 3)],
         // 1
-        vec![(0, 2), (1, 1)],
-        vec![(0, 3)],
+        vec![Run::new(0, 2), Run::new(1, 1)],
+        vec![Run::new(0, 3)],
         // 2
-        vec![(0, 1), (1, 1)],
-        vec![(0, 2)],
+        vec![Run::new(0, 1), Run::new(1, 1)],
+        vec![Run::new(0, 2)],
         // 3
-        vec![(0, 1)],
-        vec![(0, 1)],
+        vec![Run::new(0, 1)],
+        vec![Run::new(0, 1)],
         // 4
-        vec![(1, 1), (0, 1)],
-        vec![(1, 1), (0, 1)],
+        vec![Run::new(1, 1), Run::new(0, 1)],
+        vec![Run::new(1, 1), Run::new(0, 1)],
         // 5
-        vec![(0, 2)],
-        vec![(0, 1), (1, 1)],
+        vec![Run::new(0, 2)],
+        vec![Run::new(0, 1), Run::new(1, 1)],
         // 6
-        vec![(0, 1)],
-        vec![(0, 1)],
+        vec![Run::new(0, 1)],
+        vec![Run::new(0, 1)],
         // 7
-        vec![(0, 3)],
-        vec![(1, 1), (0, 2)],
+        vec![Run::new(0, 3)],
+        vec![Run::new(1, 1), Run::new(0, 2)],
     ];
     (edges, runs, 16)
 }
 
-fn create_bwt(edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)>]) -> BWT {
+fn create_bwt(edges: &[Vec<(usize, usize)>], runs: &[Vec<Run>]) -> BWT {
     let mut builder = BWTBuilder::new();
     assert_eq!(builder.len(), 0, "Newly created builder has non-zero length");
     assert!(builder.is_empty(), "Newly created builder is not empty");
@@ -143,7 +143,7 @@ fn check_iter(bwt: &BWT) {
 // Check all `lf()` results in the BWT, using the provided edges and runs as the source of truth.
 // Then check that decompressing the record works correctly.
 // Also checks that `offset_to()` works in positive cases and that `len()` is correct.
-fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)>]) {
+fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<Run>]) {
     // `lf()` at each offset of each record.
     for i in 0..bwt.len() {
         if let Some(record) = bwt.record(i) {
@@ -152,16 +152,16 @@ fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)
             let curr_runs = &runs[i];
             let decompressed = record.decompress();
             assert_eq!(decompressed.len(), record.len(), "Invalid decompressed record {} length", i);
-            for (rank, len) in curr_runs {
-                for _ in 0..*len {
-                    let edge = curr_edges[*rank];
+            for run in curr_runs {
+                for _ in 0..run.len {
+                    let edge = curr_edges[run.value];
                     let expected = if edge.0 == ENDMARKER { None } else { Some(edge) };
                     assert_eq!(record.lf(offset), expected, "Invalid lf({}) in record {}", offset, i);
                     assert_eq!(decompressed[offset], edge, "Invalid decompressed lf({}) in record {}", offset, i);
                     let expected = if edge.0 == ENDMARKER { None } else { Some(offset) };
                     assert_eq!(record.offset_to(edge), expected, "Invalid offset_to(({}, {})) in record {}", edge.0, edge.1, i);
                     offset += 1;
-                    curr_edges[*rank].1 += 1;
+                    curr_edges[run.value].1 += 1;
                 }
             }
             assert_eq!(record.len(), offset, "Invalid record {} length", i);

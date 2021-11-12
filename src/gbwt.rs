@@ -232,17 +232,14 @@ impl GBWT {
         if pos.0 <= self.first_node() {
             return None;
         }
+
         let reverse_id = self.node_to_record(support::flip_node(pos.0));
-        if let Some(record) = self.bwt.record(reverse_id) {
-            if let Some(predecessor) = record.predecessor_at(pos.1) {
-                if let Some(pred_record) = self.bwt.record(self.node_to_record(predecessor)) {
-                    if let Some(offset) = pred_record.offset_to(pos) {
-                        return Some((predecessor, offset));
-                    }
-                }
-            }
-        }
-        None
+        let record = self.bwt.record(reverse_id)?;
+        let predecessor = record.predecessor_at(pos.1)?;
+        let pred_record = self.bwt.record(self.node_to_record(predecessor))?;
+        let offset = pred_record.offset_to(pos)?;
+
+        Some((predecessor, offset))
     }
 
     /// Returns an iterator over sequence `id`, or [`None`] if there is no such sequence.
