@@ -9,7 +9,7 @@
 //! See also the original [C++ implementation](https://github.com/jltsiren/gbwt).
 
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
-use crate::Orientation;
+use crate::{Orientation, Pos};
 use crate::bwt::BWT;
 use crate::headers::{Header, GBWTPayload, MetadataPayload};
 use crate::support::{Dictionary, StringIter, Tags};
@@ -64,8 +64,8 @@ mod tests;
 ///     last = pos;
 ///     pos = index.forward(pos.unwrap());
 /// }
-/// let (node, _) = index.backward(last.unwrap()).unwrap();
-/// assert_eq!(node, support::encode_node(15, Orientation::Forward));
+/// let pos = index.backward(last.unwrap()).unwrap();
+/// assert_eq!(pos.node, support::encode_node(15, Orientation::Forward));
 ///
 /// // Search for subpath (12, forward), (14, forward), (15, forward).
 /// let state = index.find(support::encode_node(12, Orientation::Forward)).unwrap();
@@ -94,7 +94,7 @@ pub struct GBWT {
     header: Header<GBWTPayload>,
     tags: Tags,
     bwt: BWT,
-    endmarker: Vec<(usize, usize)>,
+    endmarker: Vec<Pos>,
     metadata: Option<Metadata>,
 }
 
@@ -195,9 +195,7 @@ impl AsRef<BWT> for GBWT {
 /// Sequence navigation.
 impl GBWT {
     /// Returns the first position in sequence `id`, or [`None`] if no such sequence exists.
-    ///
-    /// The return value is a pair (node identifier, offset in node).
-    pub fn start(&self, id: usize) -> Option<(usize, usize)> {
+    pub fn start(&self, id: usize) -> Option<Pos> {
         if id < self.endmarker.len() {
             Some(self.endmarker[id])
         } else {
@@ -206,40 +204,34 @@ impl GBWT {
     }
 
     /// Follows the sequence forward and returns the next position, or [`None`] if no such position exists.
-    ///
-    /// The argument and the return value are pairs (node identifier, offset in node).
-    pub fn forward(&self, pos: (usize, usize)) -> Option<(usize, usize)> {
+    pub fn forward(&self, pos: Pos) -> Option<Pos> {
         // This also catches the endmarker.
-        if pos.0 < self.first_node() {
+        if pos.node < self.first_node() {
             return None;
         }
-        if let Some(record) = self.bwt.record(self.node_to_record(pos.0)) {
-            return record.lf(pos.1);
-        }
-        None
+        let record = self.bwt.record(self.node_to_record(pos.node))?;
+        record.lf(pos.offset)
     }
 
     /// Follows the sequence backward and returns the previous position, or [`None`] if no such position exists.
     ///
-    /// The argument and the return value are pairs (node identifier, offset in node).
-    ///
     /// # Panics
     ///
     /// Panics if the index is not bidirectional.
-    pub fn backward(&self, pos: (usize, usize)) -> Option<(usize, usize)> {
+    pub fn backward(&self, pos: Pos) -> Option<Pos> {
         assert!(self.is_bidirectional(), "Following sequences backward requires a bidirectional GBWT");
         // This also catches the endmarker.
-        if pos.0 <= self.first_node() {
+        if pos.node <= self.first_node() {
             return None;
         }
 
-        let reverse_id = self.node_to_record(support::flip_node(pos.0));
+        let reverse_id = self.node_to_record(support::flip_node(pos.node));
         let record = self.bwt.record(reverse_id)?;
-        let predecessor = record.predecessor_at(pos.1)?;
+        let predecessor = record.predecessor_at(pos.offset)?;
         let pred_record = self.bwt.record(self.node_to_record(predecessor))?;
         let offset = pred_record.offset_to(pos)?;
 
-        Some((predecessor, offset))
+        Some(Pos::new(predecessor, offset))
     }
 
     /// Returns an iterator over sequence `id`, or [`None`] if there is no such sequence.
@@ -544,7 +536,7 @@ impl BidirectionalState {
 pub struct SequenceIter<'a> {
     parent: &'a GBWT,
     // The next position.
-    next: Option<(usize, usize)>,
+    next: Option<Pos>,
 }
 
 impl<'a> Iterator for SequenceIter<'a> {
@@ -553,7 +545,7 @@ impl<'a> Iterator for SequenceIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(pos) = self.next {
             self.next = self.parent.forward(pos);
-            return Some(pos.0);
+            return Some(pos.node);
         } else {
             return None;
         }

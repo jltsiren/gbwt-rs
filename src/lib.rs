@@ -24,6 +24,7 @@ pub mod graph;
 pub mod headers;
 pub mod support;
 
+pub use crate::bwt::Pos;
 pub use crate::gbwt::{GBWT, SearchState, BidirectionalState, Metadata, PathName};
 pub use crate::gbz::GBZ;
 pub use crate::graph::{Graph, Segment};

@@ -68,7 +68,7 @@ fn extract_sequence(index: &GBWT, id: usize) -> Vec<usize> {
     let mut result = Vec::new();
     let mut pos = index.start(id);
     while pos != None {
-        result.push(pos.unwrap().0);
+        result.push(pos.unwrap().node);
         pos = index.forward(pos.unwrap());
     }
     result
@@ -85,7 +85,7 @@ fn extract_backward(index: &GBWT, id: usize) -> Vec<usize> {
     let mut result = Vec::new();
     pos = last;
     while pos != None {
-        result.push(pos.unwrap().0);
+        result.push(pos.unwrap().node);
         pos = index.backward(pos.unwrap());
     }
 

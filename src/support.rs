@@ -44,7 +44,7 @@ impl Orientation {
 
 //-----------------------------------------------------------------------------
 
-/// A run as a pair (value, length).
+/// A run as a (value, length) pair.
 #[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Run {
     /// Value in the run.
