@@ -295,29 +295,29 @@ fn random_byte_code() {
 
 // Generate `n` random runs from an alphabet of size `sigma`.
 // The widths of run lengths are (almost) geometrically distributed (p = 0.5) in blocks of `w` bits.
-fn generate_runs(n: usize, sigma: usize, w: usize) -> Vec<(usize, usize)> {
+fn generate_runs(n: usize, sigma: usize, w: usize) -> Vec<Run> {
     let sigma = if sigma == 0 { usize::MAX } else { sigma };
     let mut result = Vec::with_capacity(n);
     let mut rng = rand::thread_rng();
     for _ in 0..n {
         let c: usize = rng.gen_range(0..sigma);
         let len = generate_value(&mut rng, w) + 1;
-        result.push((c, len));
+        result.push(Run::new(c, len));
     }
     result
 }
 
-fn encode_runs(encoder: &mut RLE, runs: &[(usize, usize)], name: &str) {
+fn encode_runs(encoder: &mut RLE, runs: &[Run], name: &str) {
     assert_eq!(encoder.len(), 0, "[{}]: Newly created encoder contains runs", name);
     assert!(encoder.is_empty(), "[{}]: Newly created encoder is not empty", name);
-    for (c, len) in runs {
-        encoder.write(*c, *len);
+    for run in runs {
+        encoder.write(*run);
     }
     assert!(encoder.len() >= runs.len(), "[{}]: The encoding is shorter than the number of runs", name);
     assert!(!encoder.is_empty(), "[{}]: The encoding is empty", name);
 }
 
-fn check_runs(encoder: &RLE, truth: &[(usize, usize)], name: &str) {
+fn check_runs(encoder: &RLE, truth: &[Run], name: &str) {
     let mut iter = RLEIter::with_sigma(encoder.as_ref(), encoder.sigma());
     assert_eq!(iter.offset(), 0, "[{}]: Newly creater iterator is not at offset 0", name);
     let mut i = 0;
@@ -337,17 +337,17 @@ fn test_rle(n: usize, sigma: usize, name: &str) {
     check_runs(&encoder, &runs, name);
 }
 
-fn add_run(encoder: &mut RLE, truth: &mut Vec<(usize, usize)>, len: usize, bytes: usize, name: &str) {
+fn add_run(encoder: &mut RLE, truth: &mut Vec<Run>, len: usize, bytes: usize, name: &str) {
     let old_len = encoder.len();
-    encoder.write(encoder.sigma() - 1, len);
-    truth.push((encoder.sigma() - 1, len));
+    encoder.write(Run::new(encoder.sigma() - 1, len));
+    truth.push(Run::new(encoder.sigma() - 1, len));
     assert_eq!(encoder.len() - old_len, bytes, "[{}]: Run of length {} not encoded using {} byte(s)", name, len, bytes);
 }
 
 fn test_threshold(sigma: usize, name: &str) {
     let (sigma, threshold) = RLE::sanitize(sigma);
     let mut encoder = RLE::with_sigma(sigma);
-    let mut truth: Vec<(usize, usize)> = Vec::new();
+    let mut truth: Vec<Run> = Vec::new();
     if threshold > 1 {
         add_run(&mut encoder, &mut truth, threshold - 1, 1, name);
     }
@@ -392,8 +392,8 @@ fn gbwt_record() {
         prev = *node;
     }
     encoder.set_sigma(sigma);
-    for (c, len) in runs.iter() {
-        encoder.write(*c, *len);
+    for run in runs.iter() {
+        encoder.write(*run);
     }
 
     // Decompress the edges.
@@ -409,7 +409,7 @@ fn gbwt_record() {
 
     // Decompress the runs.
     iter.set_sigma(sigma);
-    let mut decoded: Vec<(usize, usize)> = Vec::new();
+    let mut decoded: Vec<Run> = Vec::new();
     while let Some(run) = iter.next() {
         decoded.push(run);
     }

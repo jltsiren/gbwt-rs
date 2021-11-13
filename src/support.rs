@@ -33,11 +33,41 @@ pub enum Orientation {
 
 impl Orientation {
     /// Returns the other orientation.
+    #[inline]
     pub fn flip(&self) -> Orientation {
         match *self {
             Self::Forward => Self::Reverse,
             Self::Reverse => Self::Forward,
         }
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+/// A run as a (value, length) pair.
+#[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Run {
+    /// Value in the run.
+    pub value: usize,
+    /// Length of the run.
+    pub len: usize,
+}
+
+impl Run {
+    /// Creates a new run.
+    #[inline]
+    pub fn new(value: usize, len: usize) -> Self {
+        Run {
+            value: value,
+            len: len,
+        }
+    }
+}
+
+impl From<(usize, usize)> for Run {
+    #[inline]
+    fn from(run: (usize, usize)) -> Self {
+        Self::new(run.0, run.1)
     }
 }
 
@@ -907,10 +937,10 @@ impl<'a> FusedIterator for ByteCodeIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::RLE;
+/// use gbwt::support::{Run, RLE};
 ///
 /// let mut encoder = RLE::with_sigma(4);
-/// encoder.write(3, 12); encoder.write(2, 721); encoder.write(0, 34);
+/// encoder.write(Run::new(3, 12)); encoder.write(Run::new(2, 721)); encoder.write(Run::new(0, 34));
 /// assert_eq!(*encoder.as_ref(), [3 + 4 * 11, 2 + 4 * 63, 17 + 128, 5, 0 + 4 * 33]);
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -939,33 +969,33 @@ impl RLE {
         }
     }
 
-    /// Encodes a run of `len` copies of value `value` and stores the encoding.
+    /// Encodes and stores a run.
     ///
-    /// Does nothing if `len == 0`.
+    /// Does nothing if `run.len == 0`.
     ///
     /// # Panics
     ///
-    /// Panics if `value >= self.sigma()`.
-    pub fn write(&mut self, value: usize, len: usize) {
-        if len == 0 {
+    /// Panics if `run.value >= self.sigma()`.
+    pub fn write(&mut self, run: Run) {
+        if run.len == 0 {
             return;
         }
-        assert!(value < self.sigma(), "RLE: Cannot encode value {} with alphabet size {}", value, self.sigma);
-        unsafe { self.write_unchecked(value, len); }
+        assert!(run.value < self.sigma(), "RLE: Cannot encode value {} with alphabet size {}", run.value, self.sigma);
+        unsafe { self.write_unchecked(run); }
     }
 
-    /// Encodes a run of `len` copies of value `value` and stores the encoding.
+    /// Encodes and stores a run.
     ///
-    /// Behavior is undefined if `len == 0` or `value >= self.sigma()`.
-    pub unsafe fn write_unchecked(&mut self, value: usize, len: usize) {
+    /// Behavior is undefined if `run.len == 0` or `run.value >= self.sigma()`.
+    pub unsafe fn write_unchecked(&mut self, run: Run) {
         if self.sigma >= Self::THRESHOLD {
-            self.bytes.write(value);
-            self.bytes.write(len - 1);
-        } else if len < self.threshold {
-            self.write_basic(value, len);
+            self.bytes.write(run.value);
+            self.bytes.write(run.len - 1);
+        } else if run.len < self.threshold {
+            self.write_basic(run.value, run.len);
         } else {
-            self.write_basic(value, self.threshold);
-            self.bytes.write(len - self.threshold);
+            self.write_basic(run.value, self.threshold);
+            self.bytes.write(run.len - self.threshold);
         }
     }
 
@@ -1046,22 +1076,22 @@ impl From<RLE> for Vec<u8> {
 
 /// An iterator that decodes runs from a byte slice encoded by [`RLE`].
 ///
-/// The type of `Item` is `(`[`usize`]`, `[`usize`]`)`.
+/// The type of `Item` is [`Run`].
 /// Alphabet size `sigma == 0` indicates a large alphabet of unknown size.
 /// Raw bytes and [`ByteCode`]-encoded integers can be read from the encoding using [`RLEIter::byte`] and [`RLEIter::int`].
 ///
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::{RLE, RLEIter};
+/// use gbwt::support::{Run, RLE, RLEIter};
 ///
 /// let mut source = RLE::with_sigma(4);
-/// source.write(3, 12); source.write(2, 721); source.write(0, 34);
+/// source.write(Run::new(3, 12)); source.write(Run::new(2, 721)); source.write(Run::new(0, 34));
 ///
 /// let mut iter = RLEIter::with_sigma(source.as_ref(), 4);
-/// assert_eq!(iter.next(), Some((3, 12)));
-/// assert_eq!(iter.next(), Some((2, 721)));
-/// assert_eq!(iter.next(), Some((0, 34)));
+/// assert_eq!(iter.next(), Some(Run::new(3, 12)));
+/// assert_eq!(iter.next(), Some(Run::new(2, 721)));
+/// assert_eq!(iter.next(), Some(Run::new(0, 34)));
 /// assert_eq!(iter.next(), None);
 /// ```
 #[derive(Clone, Debug)]
@@ -1128,22 +1158,22 @@ impl<'a> RLEIter<'a> {
 }
 
 impl<'a> Iterator for RLEIter<'a> {
-    type Item = (usize, usize);
+    type Item = Run;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut run = (0, 0);
+        let mut run = Run::default();
         if self.sigma >= RLE::THRESHOLD {
-            if let Some(value) = self.source.next() { run.0 = value; } else { return None; }
-            if let Some(len) = self.source.next() { run.1 = len + 1; } else { return None; }
+            if let Some(value) = self.source.next() { run.value = value; } else { return None; }
+            if let Some(len) = self.source.next() { run.len = len + 1; } else { return None; }
         } else {
             if let Some(byte) = self.source.byte() {
-                run.0 = (byte as usize) % self.sigma;
-                run.1 = (byte as usize) / self.sigma + 1;
+                run.value = (byte as usize) % self.sigma;
+                run.len = (byte as usize) / self.sigma + 1;
             } else {
                 return None;
             }
-            if run.1 == self.threshold {
-                if let Some(len) = self.source.next() { run.1 += len; } else { return None; }
+            if run.len == self.threshold {
+                if let Some(len) = self.source.next() { run.len += len; } else { return None; }
             }
         }
         return Some(run);

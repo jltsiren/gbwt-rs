@@ -7,86 +7,86 @@ use std::collections::HashSet;
 //-----------------------------------------------------------------------------
 
 // GBWT example from the paper: (edges, runs, invalid_node)
-fn get_edges_runs() -> (Vec<Vec<(usize, usize)>>, Vec<Vec<(usize, usize)>>, usize) {
+fn get_edges_runs() -> (Vec<Vec<Pos>>, Vec<Vec<Run>>, usize) {
     let edges = vec![
-        vec![(1, 0)],
-        vec![(2, 0), (3, 0)],
-        vec![(4, 0), (5, 0)],
-        vec![(4, 1)],
-        vec![(5, 1), (6, 0)],
-        vec![(7, 0)],
-        vec![(7, 2)],
-        vec![(0, 0)],
+        vec![Pos::new(1, 0)],
+        vec![Pos::new(2, 0), Pos::new(3, 0)],
+        vec![Pos::new(4, 0), Pos::new(5, 0)],
+        vec![Pos::new(4, 1)],
+        vec![Pos::new(5, 1), Pos::new(6, 0)],
+        vec![Pos::new(7, 0)],
+        vec![Pos::new(7, 2)],
+        vec![Pos::new(0, 0)],
     ];
     let runs = vec![
-        vec![(0, 3)],
-        vec![(0, 2), (1, 1)],
-        vec![(0, 1), (1, 1)],
-        vec![(0, 1)],
-        vec![(1, 1), (0, 1)],
-        vec![(0, 2)],
-        vec![(0, 1)],
-        vec![(0, 3)],
+        vec![Run::new(0, 3)],
+        vec![Run::new(0, 2), Run::new(1, 1)],
+        vec![Run::new(0, 1), Run::new(1, 1)],
+        vec![Run::new(0, 1)],
+        vec![Run::new(1, 1), Run::new(0, 1)],
+        vec![Run::new(0, 2)],
+        vec![Run::new(0, 1)],
+        vec![Run::new(0, 3)],
     ];
     (edges, runs, 8)
 }
 
 // Bidirectional version of the example: (edges, runs, invalid_node)
-fn get_bidirectional() -> (Vec<Vec<(usize, usize)>>, Vec<Vec<(usize, usize)>>, usize) {
+fn get_bidirectional() -> (Vec<Vec<Pos>>, Vec<Vec<Run>>, usize) {
     let edges = vec![
         // ENDMARKER
-        vec![(2, 0), (15, 0)],
+        vec![Pos::new(2, 0), Pos::new(15, 0)],
         // 1
-        vec![(4, 0), (6, 0)],
-        vec![(0, 0)],
+        vec![Pos::new(4, 0), Pos::new(6, 0)],
+        vec![Pos::new(0, 0)],
         // 2
-        vec![(8, 0), (10, 0)],
-        vec![(3, 0)],
+        vec![Pos::new(8, 0), Pos::new(10, 0)],
+        vec![Pos::new(3, 0)],
         // 3
-        vec![(8, 1)],
-        vec![(3, 2)],
+        vec![Pos::new(8, 1)],
+        vec![Pos::new(3, 2)],
         // 4
-        vec![(10, 1), (12, 0)],
-        vec![(5, 0), (7, 0)],
+        vec![Pos::new(10, 1), Pos::new(12, 0)],
+        vec![Pos::new(5, 0), Pos::new(7, 0)],
         // 5
-        vec![(14, 0)],
-        vec![(5, 1), (9, 0)],
+        vec![Pos::new(14, 0)],
+        vec![Pos::new(5, 1), Pos::new(9, 0)],
         // 6
-        vec![(14, 2)],
-        vec![(9, 1)],
+        vec![Pos::new(14, 2)],
+        vec![Pos::new(9, 1)],
         // 7
-        vec![(0, 0)],
-        vec![(11, 0), (13, 0)],
+        vec![Pos::new(0, 0)],
+        vec![Pos::new(11, 0), Pos::new(13, 0)],
     ];
     let runs = vec![
         // ENDMARKER
-        vec![(0, 3), (1, 3)],
+        vec![Run::new(0, 3), Run::new(1, 3)],
         // 1
-        vec![(0, 2), (1, 1)],
-        vec![(0, 3)],
+        vec![Run::new(0, 2), Run::new(1, 1)],
+        vec![Run::new(0, 3)],
         // 2
-        vec![(0, 1), (1, 1)],
-        vec![(0, 2)],
+        vec![Run::new(0, 1), Run::new(1, 1)],
+        vec![Run::new(0, 2)],
         // 3
-        vec![(0, 1)],
-        vec![(0, 1)],
+        vec![Run::new(0, 1)],
+        vec![Run::new(0, 1)],
         // 4
-        vec![(1, 1), (0, 1)],
-        vec![(1, 1), (0, 1)],
+        vec![Run::new(1, 1), Run::new(0, 1)],
+        vec![Run::new(1, 1), Run::new(0, 1)],
         // 5
-        vec![(0, 2)],
-        vec![(0, 1), (1, 1)],
+        vec![Run::new(0, 2)],
+        vec![Run::new(0, 1), Run::new(1, 1)],
         // 6
-        vec![(0, 1)],
-        vec![(0, 1)],
+        vec![Run::new(0, 1)],
+        vec![Run::new(0, 1)],
         // 7
-        vec![(0, 3)],
-        vec![(1, 1), (0, 2)],
+        vec![Run::new(0, 3)],
+        vec![Run::new(1, 1), Run::new(0, 2)],
     ];
     (edges, runs, 16)
 }
 
-fn create_bwt(edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)>]) -> BWT {
+fn create_bwt(edges: &[Vec<Pos>], runs: &[Vec<Run>]) -> BWT {
     let mut builder = BWTBuilder::new();
     assert_eq!(builder.len(), 0, "Newly created builder has non-zero length");
     assert!(builder.is_empty(), "Newly created builder is not empty");
@@ -102,7 +102,7 @@ fn create_bwt(edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)>]) -> BW
 
 // Check records in the BWT, using the provided edges as the source of truth.
 // Also checks that `id()` works correctly.
-fn check_records(bwt: &BWT, edges: &[Vec<(usize, usize)>]) {
+fn check_records(bwt: &BWT, edges: &[Vec<Pos>]) {
     assert_eq!(bwt.len(), edges.len(), "Invalid number of records in the BWT");
     assert_eq!(bwt.is_empty(), edges.is_empty(), "Invalid BWT emptiness");
 
@@ -115,8 +115,8 @@ fn check_records(bwt: &BWT, edges: &[Vec<(usize, usize)>]) {
             assert_eq!(record.id(), i, "Invalid id for record {}", i);
             assert_eq!(record.outdegree(), curr_edges.len(), "Invalid outdegree in record {}", i);
             for j in 0..record.outdegree() {
-                assert_eq!(record.successor(j), curr_edges[j].0, "Invalid successor {} in record {}", j, i);
-                assert_eq!(record.offset(j), curr_edges[j].1, "Invalid offset {} in record {}", j, i);
+                assert_eq!(record.successor(j), curr_edges[j].node, "Invalid successor {} in record {}", j, i);
+                assert_eq!(record.offset(j), curr_edges[j].offset, "Invalid offset {} in record {}", j, i);
             }
         }
     }
@@ -143,7 +143,7 @@ fn check_iter(bwt: &BWT) {
 // Check all `lf()` results in the BWT, using the provided edges and runs as the source of truth.
 // Then check that decompressing the record works correctly.
 // Also checks that `offset_to()` works in positive cases and that `len()` is correct.
-fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)>]) {
+fn check_lf(bwt: &BWT, edges: &[Vec<Pos>], runs: &[Vec<Run>]) {
     // `lf()` at each offset of each record.
     for i in 0..bwt.len() {
         if let Some(record) = bwt.record(i) {
@@ -152,16 +152,16 @@ fn check_lf(bwt: &BWT, edges: &[Vec<(usize, usize)>], runs: &[Vec<(usize, usize)
             let curr_runs = &runs[i];
             let decompressed = record.decompress();
             assert_eq!(decompressed.len(), record.len(), "Invalid decompressed record {} length", i);
-            for (rank, len) in curr_runs {
-                for _ in 0..*len {
-                    let edge = curr_edges[*rank];
-                    let expected = if edge.0 == ENDMARKER { None } else { Some(edge) };
+            for run in curr_runs {
+                for _ in 0..run.len {
+                    let edge = curr_edges[run.value];
+                    let expected = if edge.node == ENDMARKER { None } else { Some(edge) };
                     assert_eq!(record.lf(offset), expected, "Invalid lf({}) in record {}", offset, i);
                     assert_eq!(decompressed[offset], edge, "Invalid decompressed lf({}) in record {}", offset, i);
-                    let expected = if edge.0 == ENDMARKER { None } else { Some(offset) };
-                    assert_eq!(record.offset_to(edge), expected, "Invalid offset_to(({}, {})) in record {}", edge.0, edge.1, i);
+                    let expected = if edge.node == ENDMARKER { None } else { Some(offset) };
+                    assert_eq!(record.offset_to(edge), expected, "Invalid offset_to(({}, {})) in record {}", edge.node, edge.offset, i);
                     offset += 1;
-                    curr_edges[*rank].1 += 1;
+                    curr_edges[run.value].offset += 1;
                 }
             }
             assert_eq!(record.len(), offset, "Invalid record {} length", i);
@@ -193,8 +193,8 @@ fn check_follow(bwt: &BWT, invalid_node: usize) {
                     if let Some(result) = record.follow(start..limit, successor) {
                         let mut found = result.start..result.start;
                         for j in start..limit {
-                            if let Some((node, offset)) = record.lf(j) {
-                                if node == successor && offset == found.end {
+                            if let Some(pos) = record.lf(j) {
+                                if pos.node == successor && pos.offset == found.end {
                                     found.end += 1;
                                 }
                             }
@@ -207,8 +207,8 @@ fn check_follow(bwt: &BWT, invalid_node: usize) {
                         }
                     } else {
                         for j in start..limit {
-                            if let Some((node, _)) = record.lf(j) {
-                                assert_ne!(node, successor, "follow({}..{}, {}) did not follow offset {} in record {}", start, limit, successor, j, i);
+                            if let Some(pos) = record.lf(j) {
+                                assert_ne!(pos.node, successor, "follow({}..{}, {}) did not follow offset {} in record {}", start, limit, successor, j, i);
                             }
                             assert_eq!(record.bd_follow(start..limit, successor), None, "Got a bd_follow({}..{}, {}) result in record {}", start, limit, successor, i);
                         }
@@ -226,8 +226,8 @@ fn check_follow(bwt: &BWT, invalid_node: usize) {
 // Check negative cases for `offset_to()`.
 fn negative_offset_to(bwt: &BWT, invalid_node: usize) {
     for record in bwt.iter() {
-        assert_eq!(record.offset_to((ENDMARKER, 0)), None, "Got an offset to the endmarker from record {}", record.id());
-        assert_eq!(record.offset_to((invalid_node, 0)), None, "Got an offset to an invalid node from record {}", record.id());
+        assert_eq!(record.offset_to(Pos::new(ENDMARKER, 0)), None, "Got an offset to the endmarker from record {}", record.id());
+        assert_eq!(record.offset_to(Pos::new(invalid_node, 0)), None, "Got an offset to an invalid node from record {}", record.id());
         for rank in 0..record.outdegree() {
             let successor = record.successor(rank);
             if successor == ENDMARKER {
@@ -235,10 +235,10 @@ fn negative_offset_to(bwt: &BWT, invalid_node: usize) {
             }
             let offset = record.offset(rank);
             if offset > 0 {
-                assert_eq!(record.offset_to((successor, offset - 1)), None, "Got an offset from record {} to a too small position in {}", record.id(), successor);
+                assert_eq!(record.offset_to(Pos::new(successor, offset - 1)), None, "Got an offset from record {} to a too small position in {}", record.id(), successor);
             }
             let count = record.follow(0..record.len(), successor).unwrap().len();
-            assert_eq!(record.offset_to((successor, offset + count)), None, "Got an offset from record {} to a too large position in {}", record.id(), successor);
+            assert_eq!(record.offset_to(Pos::new(successor, offset + count)), None, "Got an offset from record {} to a too large position in {}", record.id(), successor);
         }
     }
 }
@@ -246,7 +246,7 @@ fn negative_offset_to(bwt: &BWT, invalid_node: usize) {
 // Check that we can find predecessors for all positions except starting positions.
 // The tests for `GBWT::backward()` will make sure that the predecessors are correct.
 fn check_predecessor_at(bwt: &BWT) {
-    let mut starting_positions = HashSet::<(usize, usize)>::new();
+    let mut starting_positions = HashSet::<Pos>::new();
     let endmarker = bwt.record(ENDMARKER).unwrap();
     for i in 0..endmarker.len() {
         starting_positions.insert(endmarker.lf(i).unwrap());
@@ -259,7 +259,7 @@ fn check_predecessor_at(bwt: &BWT) {
         let reverse_id = ((record.id() + 1) ^ 1) - 1; // Record to node, flip, node to record.
         let reverse_record = bwt.record(reverse_id).unwrap();
         for i in 0..record.len() {
-            if starting_positions.contains(&(record.id() + 1, i)) {
+            if starting_positions.contains(&Pos::new(record.id() + 1, i)) {
                 assert!(reverse_record.predecessor_at(i).is_none(), "Found a predecessor for a starting position ({}, {})", record.id() + 1, i);
             } else {
                 assert!(reverse_record.predecessor_at(i).is_some(), "Did not find a predecessor for position ({}, {})", record.id() + 1, i);

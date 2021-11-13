@@ -68,7 +68,7 @@ fn extract_sequence(index: &GBWT, id: usize) -> Vec<usize> {
     let mut result = Vec::new();
     let mut pos = index.start(id);
     while pos != None {
-        result.push(pos.unwrap().0);
+        result.push(pos.unwrap().node);
         pos = index.forward(pos.unwrap());
     }
     result
@@ -85,7 +85,7 @@ fn extract_backward(index: &GBWT, id: usize) -> Vec<usize> {
     let mut result = Vec::new();
     pos = last;
     while pos != None {
-        result.push(pos.unwrap().0);
+        result.push(pos.unwrap().node);
         pos = index.backward(pos.unwrap());
     }
 
@@ -178,9 +178,12 @@ fn sequence() {
 
     for i in 0..index.sequences() {
         let extracted = extract_sequence(&index, i);
-        let iterated: Vec<usize> = index.sequence(i).collect();
+        let iter = index.sequence(i);
+        assert!(iter.is_some(), "Could not get an iterator for sequence {}", i);
+        let iterated: Vec<usize> = iter.unwrap().collect();
         assert_eq!(iterated, extracted, "Invalid sequence {} from an iterator", i);
     }
+    assert!(index.sequence(index.sequences()).is_none(), "Got an iterator for a past-the-end sequence id");
 }
 
 //-----------------------------------------------------------------------------

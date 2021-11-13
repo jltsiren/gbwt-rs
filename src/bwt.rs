@@ -3,18 +3,20 @@
 //! # Examples
 //!
 //! ```
+//! use gbwt::Pos;
 //! use gbwt::bwt::{BWT, BWTBuilder};
+//! use gbwt::support::Run;
 //!
 //! // Encode the GBWT example from the paper.
 //! let mut builder = BWTBuilder::new();
-//! builder.append(&[(1, 0)], &[(0, 3)]);
-//! builder.append(&[(2, 0), (3, 0)], &[(0, 2), (1, 1)]);
-//! builder.append(&[(4, 0), (5, 0)], &[(0, 1), (1, 1)]);
-//! builder.append(&[(4, 1)], &[(0, 1)]);
-//! builder.append(&[(5, 1), (6, 0)], &[(1, 1), (0, 1)]);
-//! builder.append(&[(7, 0)], &[(0, 2)]);
-//! builder.append(&[(7, 2)], &[(0, 1)]);
-//! builder.append(&[(0, 0)], &[(0, 3)]);
+//! builder.append(&[Pos::new(1, 0)], &[Run::new(0, 3)]);
+//! builder.append(&[Pos::new(2, 0), Pos::new(3, 0)], &[Run::new(0, 2), Run::new(1, 1)]);
+//! builder.append(&[Pos::new(4, 0), Pos::new(5, 0)], &[Run::new(0, 1), Run::new(1, 1)]);
+//! builder.append(&[Pos::new(4, 1)], &[Run::new(0, 1)]);
+//! builder.append(&[Pos::new(5, 1), Pos::new(6, 0)], &[Run::new(1, 1), Run::new(0, 1)]);
+//! builder.append(&[Pos::new(7, 0)], &[Run::new(0, 2)]);
+//! builder.append(&[Pos::new(7, 2)], &[Run::new(0, 1)]);
+//! builder.append(&[Pos::new(0, 0)], &[Run::new(0, 3)]);
 //!
 //! let bwt = BWT::from(builder);
 //! assert_eq!(bwt.len(), 8);
@@ -25,7 +27,7 @@
 //! assert_eq!(node_2.successor(1), 5);
 //! assert_eq!(node_2.offset(1), 0);
 //! assert_eq!(node_2.len(), 2);
-//! assert_eq!(node_2.lf(1), Some((5, 0)));
+//! assert_eq!(node_2.lf(1), Some(Pos::new(5, 0)));
 //! assert_eq!(node_2.follow(0..2, 5), Some(0..1));
 //!
 //! // Determine the length of the BWT by iterating over the records.
@@ -37,7 +39,7 @@
 //! assert_eq!(ids, vec![0, 1, 2, 3, 4, 5, 6, 7]);
 //! ```
 
-use crate::support::{ByteCodeIter, RLE, RLEIter};
+use crate::support::{ByteCodeIter, Run, RLE, RLEIter};
 use crate::ENDMARKER;
 use crate::support;
 
@@ -54,6 +56,35 @@ use std::io;
 
 #[cfg(test)]
 mod tests;
+
+//-----------------------------------------------------------------------------
+
+/// A GBWT position as a (node, offset) pair.
+#[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Pos {
+    /// GBWT node identifier.
+    pub node: usize,
+    /// BWT offset within the node.
+    pub offset: usize,
+}
+
+impl Pos {
+    /// Creates a new position.
+    #[inline]
+    pub fn new(node: usize, offset: usize) -> Self {
+        Pos {
+            node: node,
+            offset: offset,
+        }
+    }
+}
+
+impl From<(usize, usize)> for Pos {
+    #[inline]
+    fn from(pos: (usize, usize)) -> Self {
+        Self::new(pos.0, pos.1)
+    }
+}
 
 //-----------------------------------------------------------------------------
 
@@ -187,19 +218,20 @@ impl BWTBuilder {
     /// Appends a new record to the BWT.
     ///
     /// The record consists of a list of edges and a list of runs.
-    /// Each edge is a pair (node id, BWT offset), where node id is not necessarily the same as record id.
-    /// Each run is a pair `(rank, len)`, with `rank < edges.len()` and `len > 0`.
-    pub fn append(&mut self, edges: &[(usize, usize)], runs: &[(usize, usize)]) {
+    /// Each edge is a position in the successor node.
+    /// Note that the successor node is given by its node id, which is not necessarily the same as its record id.
+    /// Each run must have `run.value < edges.len()` and `run.len > 0`.
+    pub fn append(&mut self, edges: &[Pos], runs: &[Run]) {
         self.offsets.push(self.encoder.len());
         self.encoder.write_int(edges.len());
         let mut prev = 0;
-        for (node, offset) in edges {
-            self.encoder.write_int(*node - prev); self.encoder.write_int(*offset);
-            prev = *node;
+        for edge in edges {
+            self.encoder.write_int(edge.node - prev); self.encoder.write_int(edge.offset);
+            prev = edge.node;
         }
         self.encoder.set_sigma(edges.len());
-        for (rank, len) in runs {
-            self.encoder.write(*rank, *len);
+        for run in runs {
+            self.encoder.write(*run);
         }
     }
 }
@@ -283,7 +315,7 @@ impl<'a> FusedIterator for IdIter<'a> {}
 #[derive(Clone, Debug)]
 pub struct Record<'a> {
     id: usize,
-    edges: Vec<(usize, usize)>,
+    edges: Vec<Pos>,
     bwt: &'a [u8],
 }
 
@@ -302,13 +334,13 @@ impl<'a> Record<'a> {
         }
 
         // Decompress the edges.
-        let mut edges: Vec<(usize, usize)> = Vec::new();
+        let mut edges: Vec<Pos> = Vec::new();
         let mut prev = 0;
         for _ in 0..sigma {
             let node = iter.next().unwrap() + prev;
             prev = node;
             let offset = iter.next().unwrap();
-            edges.push((node, offset));
+            edges.push(Pos::new(node, offset));
         }
 
         Some(Record {
@@ -336,7 +368,7 @@ impl<'a> Record<'a> {
     /// May panic if `i >= self.outdegree()`.
     #[inline]
     pub fn successor(&self, i: usize) -> usize {
-        self.edges[i].0
+        self.edges[i].node
     }
 
     /// Returns the BWT offset in the node of rank `i`.
@@ -346,7 +378,7 @@ impl<'a> Record<'a> {
     /// May panic if `i >= self.outdegree()`.
     #[inline]
     pub fn offset(&self, i: usize) -> usize {
-        self.edges[i].1
+        self.edges[i].offset
     }
 
     /// Returns the length of the offset range.
@@ -355,42 +387,42 @@ impl<'a> Record<'a> {
     /// Note that the length is always non-zero.
     pub fn len(&self) -> usize {
         let mut result = 0;
-        for (_, len) in RLEIter::with_sigma(self.bwt, self.edges.len()) {
-            result += len;
+        for run in RLEIter::with_sigma(self.bwt, self.edges.len()) {
+            result += run.len;
         }
         result
     }
 
-    /// Decompress the record as a vector of (successor node, offset in successor) pairs.
-    pub fn decompress(&self) -> Vec<(usize, usize)> {
+    /// Decompress the record as a vector of successor positions.
+    pub fn decompress(&self) -> Vec<Pos> {
         let mut edges = self.edges.clone();
-        let mut result: Vec<(usize, usize)> = Vec::new();
-        for (rank, len) in RLEIter::with_sigma(self.bwt, self.edges.len()) {
-            for _ in 0..len {
-                result.push(edges[rank]);
-                edges[rank].1 += 1;
+        let mut result: Vec<Pos> = Vec::new();
+        for run in RLEIter::with_sigma(self.bwt, self.edges.len()) {
+            for _ in 0..run.len {
+                result.push(edges[run.value]);
+                edges[run.value].offset += 1;
             }
         }
         result
     }
 
-    /// Follows the sequence at offset `i` and returns (successor node, offset in successor).
+    /// Follows the sequence at offset `i` and returns the successor position.
     ///
     /// Returns [`None`] if the sequence ends or offset `i` does not exist.
-    pub fn lf(&self, i: usize) -> Option<(usize, usize)> {
+    pub fn lf(&self, i: usize) -> Option<Pos> {
         let mut edges = self.edges.clone();
         let mut offset = 0;
-        for (rank, len) in RLEIter::with_sigma(self.bwt, self.edges.len()) {
-            if offset + len > i {
-                if self.successor(rank) == ENDMARKER {
+        for run in RLEIter::with_sigma(self.bwt, self.edges.len()) {
+            if offset + run.len > i {
+                if self.successor(run.value) == ENDMARKER {
                     return None;
                 } else {
-                    edges[rank].1 += i - offset;
-                    return Some(edges[rank]);
+                    edges[run.value].offset += i - offset;
+                    return Some(edges[run.value]);
                 }
             }
-            edges[rank].1 += len;
-            offset += len;
+            edges[run.value].offset += run.len;
+            offset += run.len;
         }
         None
     }
@@ -401,38 +433,38 @@ impl<'a> Record<'a> {
     /// Returns [`None`] if the predecessor or the offset does not exist.
     pub fn predecessor_at(&self, i: usize) -> Option<usize> {
         // Determine the number of sequences going to each successor node.
-        let mut edges: Vec<(usize, usize)> = Vec::with_capacity(self.edges.len());
+        let mut edges: Vec<Pos> = Vec::with_capacity(self.edges.len());
         for rank in 0..self.edges.len() {
-            edges.push((self.successor(rank), 0));
+            edges.push(Pos::new(self.successor(rank), 0));
         }
-        for (rank, len) in RLEIter::with_sigma(self.bwt, self.edges.len()) {
-            edges[rank].1 += len;
+        for run in RLEIter::with_sigma(self.bwt, self.edges.len()) {
+            edges[run.value].offset += run.len;
         }
 
         // Flip the successor nodes to make them the predecessors of the other orientation of this node.
         for rank in 0..edges.len() {
-            if edges[rank].0 != ENDMARKER {
-                edges[rank].0 = support::flip_node(edges[rank].0);
+            if edges[rank].node != ENDMARKER {
+                edges[rank].node = support::flip_node(edges[rank].node);
             }
         }
 
         // Handle the special case where the predecessors are now in wrong order because they contain
         // both orientations of the same node.
         for rank in 1..edges.len() {
-            if support::node_id(edges[rank - 1].0) == support::node_id(edges[rank].0) {
+            if support::node_id(edges[rank - 1].node) == support::node_id(edges[rank].node) {
                 edges.swap(rank - 1, rank);
             }
         }
 
         // Find the predecessor, if it exists.
         let mut offset = 0;
-        for (id, count) in edges {
-            offset += count;
+        for edge in edges {
+            offset += edge.offset;
             if offset > i {
-                if id == ENDMARKER {
+                if edge.node == ENDMARKER {
                     return None;
                 }
-                return Some(id);
+                return Some(edge.node);
             }
         }
 
@@ -445,7 +477,7 @@ impl<'a> Record<'a> {
         let mut high = self.outdegree();
         while low < high {
             let mid = low + (high - low) / 2;
-            match node.cmp(&self.edges[mid].0) {
+            match node.cmp(&self.edges[mid].node) {
                 Ordering::Less => high = mid,
                 Ordering::Equal => return Some(mid),
                 Ordering::Greater => low = mid + 1,
@@ -455,32 +487,28 @@ impl<'a> Record<'a> {
     }
 
     /// Returns the offset for which [`Self::lf`] would return `pos`, or [`None`] if no such offset exists.
-    pub fn offset_to(&self, pos: (usize, usize)) -> Option<usize> {
-        if pos.0 == ENDMARKER {
+    pub fn offset_to(&self, pos: Pos) -> Option<usize> {
+        if pos.node == ENDMARKER {
             return None;
         }
-        let outrank = self.edge_to(pos.0);
-        if outrank == None {
-            return None;
-        }
-        let outrank = outrank.unwrap();
+        let outrank = self.edge_to(pos.node)?;
 
         // Rank of `pos.0` so far.
         let mut succ_rank = self.offset(outrank);
-        if succ_rank > pos.1 {
+        if succ_rank > pos.offset {
             return None;
         }
 
         // Find the occurrence of `pos.0` of rank `pos.1 - succ_rank`.
         let mut offset = 0;
-        for (c, len) in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
-            offset += len;
-            if c != outrank {
+        for run in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
+            offset += run.len;
+            if run.value != outrank {
                 continue;
             }
-            succ_rank += len;
-            if succ_rank > pos.1 {
-                return Some(offset - (succ_rank - pos.1));
+            succ_rank += run.len;
+            if succ_rank > pos.offset {
+                return Some(offset - (succ_rank - pos.offset));
             }
         }
 
@@ -508,13 +536,13 @@ impl<'a> Record<'a> {
 
         let mut result = self.offset(rank)..self.offset(rank);
         let mut offset = 0;
-        for (c, len) in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
-            if c == rank {
-                let run = offset..offset + len;
-                result.start += support::intersect(&run, &(0..range.start)).len();
-                result.end += support::intersect(&run, &(0..range.end)).len();
+        for run in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
+            if run.value == rank {
+                let run_range = offset..offset + run.len;
+                result.start += support::intersect(&run_range, &(0..range.start)).len();
+                result.end += support::intersect(&run_range, &(0..range.end)).len();
             }
-            offset += len;
+            offset += run.len;
             if offset >= range.end {
                 break;
             }
@@ -549,16 +577,16 @@ impl<'a> Record<'a> {
         let mut result = self.offset(rank)..self.offset(rank);
         let mut count = 0;
         let mut offset = 0;
-        for (c, len) in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
-            let run = offset..offset + len;
-            if c == rank {
-                result.start += support::intersect(&run, &(0..range.start)).len();
-                result.end += support::intersect(&run, &(0..range.end)).len();
+        for run in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
+            let run_range = offset..offset + run.len;
+            if run.value == rank {
+                result.start += support::intersect(&run_range, &(0..range.start)).len();
+                result.end += support::intersect(&run_range, &(0..range.end)).len();
             }
-            if support::flip_node(self.successor(c)) < reverse {
-                count += support::intersect(&run, &range).len();
+            if support::flip_node(self.successor(run.value)) < reverse {
+                count += support::intersect(&run_range, &range).len();
             }
-            offset += len;
+            offset += run.len;
             if offset >= range.end {
                 break;
             }
