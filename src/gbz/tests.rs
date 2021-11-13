@@ -107,14 +107,18 @@ fn check_states(gbz: &GBZ) {
     let mut visited: HashSet<BidirectionalState> = HashSet::new();
 
     // Start from every node in every orientation.
-    for node_id in gbz.node_iter() {
+    for node_id in 0..gbz.max_node() + 2 {
         for orientation in [Orientation::Forward, Orientation::Reverse] {
-            let truth = gbz.index.bd_find(support::encode_node(node_id, orientation));
             let state = gbz.search_state(node_id, orientation);
-            assert_eq!(state, truth, "Invalid search state for node {} {}", node_id, name(orientation));
-            if let Some(state) = state {
-                stack.push(state.clone());
-                visited.insert(state);
+            if gbz.has_node(node_id) {
+                let truth = gbz.index.bd_find(support::encode_node(node_id, orientation));
+                assert_eq!(state, truth, "Invalid search state for node {} {}", node_id, name(orientation));
+                if let Some(state) = state {
+                    stack.push(state.clone());
+                    visited.insert(state);
+                }
+            } else {
+                assert!(state.is_none(), "Got a search state for nonexistent node {} {}", node_id, name(orientation));
             }
         }
     }
