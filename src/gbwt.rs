@@ -10,7 +10,7 @@
 
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
 use crate::{Orientation, Pos};
-use crate::bwt::BWT;
+use crate::bwt::{BWT, Record};
 use crate::headers::{Header, GBWTPayload, MetadataPayload};
 use crate::support::{Dictionary, StringIter, Tags};
 use crate::support;
@@ -327,24 +327,8 @@ impl GBWT {
         if node < self.first_node() {
             return None;
         }
-        if let Some(record) = self.bwt.record(self.node_to_record(state.forward.node)) {
-            if let Some((range, offset)) = record.bd_follow(state.forward.range.clone(), node) {
-                let forward = SearchState {
-                    node: node,
-                    range: range,
-                };
-                let pos = state.reverse.range.start + offset;
-                let reverse = SearchState {
-                    node: state.reverse.node,
-                    range: pos..pos + forward.len(),
-                };
-                return Some(BidirectionalState {
-                    forward: forward,
-                    reverse: reverse,
-                });
-            }
-        }
-        None
+        let record = self.bwt.record(self.node_to_record(state.forward.node))?;
+        Self::bd_internal(&record, &state, node)
     }
 
     /// Extends the search by the given node backward and returns the new search state, or [`None`] if no such extensions exist.
@@ -365,6 +349,25 @@ impl GBWT {
             return Some(result.flip());
         }
         None
+    }
+
+    // Internal implementation of bidirectional search. Extends the state forward.
+    #[doc(hidden)]
+    pub fn bd_internal(record: &Record, state: &BidirectionalState, node: usize) -> Option<BidirectionalState> {
+        let (range, offset) = record.bd_follow(state.forward.range.clone(), node)?;
+        let forward = SearchState {
+            node: node,
+            range: range,
+        };
+        let pos = state.reverse.range.start + offset;
+        let reverse = SearchState {
+            node: state.reverse.node,
+            range: pos..pos + forward.len(),
+        };
+        Some(BidirectionalState {
+            forward: forward,
+            reverse: reverse,
+        })
     }
 }
 

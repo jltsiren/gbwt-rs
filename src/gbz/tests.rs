@@ -4,9 +4,13 @@ use crate::support;
 
 use simple_sds::serialize;
 
-use std::collections::{BTreeSet, BTreeMap};
+use std::collections::{BTreeSet, BTreeMap, HashSet};
 
 //-----------------------------------------------------------------------------
+
+fn name(orientation: Orientation) -> &'static str {
+     if orientation == Orientation::Forward { "(forward)" } else { "(reverse)" }
+}
 
 fn check_nodes(gbz: &GBZ, true_nodes: &[(usize, &str)]) {
     let mut truth: BTreeMap<usize, String> = BTreeMap::new();
@@ -67,7 +71,7 @@ fn get_pred_succ<T: Iterator<Item = usize>>(edges: &[(usize, Orientation, usize,
 }
 
 fn check_pred_succ(gbz: &GBZ, predecessors: &Neighbors, successors: &Neighbors, node_id: usize, orientation: Orientation) {
-    let name = if orientation == Orientation::Forward { "(forward)" } else { "(reverse)" };
+    let name = name(orientation);
     if gbz.has_node(node_id) {
         let truth = predecessors.get(&(node_id, orientation)).unwrap();
         let iter = gbz.predecessors(node_id, orientation);
@@ -96,6 +100,72 @@ fn check_paths(gbz: &GBZ, truth: &[Vec<(usize, Orientation)>]) {
 
     assert!(gbz.path(truth.len(), Orientation::Forward).is_none(), "Got a past-the-end path {} (forward)", truth.len());
     assert!(gbz.path(truth.len(), Orientation::Reverse).is_none(), "Got a past-the-end path {} (reverse)", truth.len());
+}
+
+fn check_states(gbz: &GBZ) {
+    let mut stack: Vec<BidirectionalState> = Vec::new();
+    let mut visited: HashSet<BidirectionalState> = HashSet::new();
+
+    // Start from every node in every orientation.
+    for node_id in gbz.node_iter() {
+        for orientation in [Orientation::Forward, Orientation::Reverse] {
+            let truth = gbz.index.bd_find(support::encode_node(node_id, orientation));
+            let state = gbz.search_state(node_id, orientation);
+            assert_eq!(state, truth, "Invalid search state for node {} {}", node_id, name(orientation));
+            if let Some(state) = state {
+                stack.push(state.clone());
+                visited.insert(state);
+            }
+        }
+    }
+
+    // Find all extensions of each state and compare them to those obtained from the index.
+    // Put unvisited states into stack.
+    while !stack.is_empty() {
+        let state = stack.pop().unwrap();
+
+        // Forward extensions.
+        let mut truth: HashSet<BidirectionalState> = HashSet::new();
+        let (last_id, last_o) = state.to();
+        for (node_id, orientation) in gbz.successors(last_id, last_o).unwrap() {
+            if let Some(successor) = gbz.index.extend_forward(&state, support::encode_node(node_id, orientation)) {
+                truth.insert(successor);
+            }
+        }
+        if let Some(iter) = gbz.follow_forward(&state) {
+            let found: HashSet<BidirectionalState> = iter.collect();
+            assert_eq!(found, truth, "Invalid successors from {:?}", state);
+            for succ in found.iter() {
+                if !visited.contains(succ) {
+                    stack.push(succ.clone());
+                    visited.insert(succ.clone());
+                }
+            }
+        } else {
+            panic!("Could not follow paths forward from {:?}", state);
+        }
+
+        // Backward extensions.
+        let mut truth: HashSet<BidirectionalState> = HashSet::new();
+        let (first_id, first_o) = state.from();
+        for (node_id, orientation) in gbz.predecessors(first_id, first_o).unwrap() {
+            if let Some(predecessor) = gbz.index.extend_backward(&state, support::encode_node(node_id, orientation)) {
+                truth.insert(predecessor);
+            }
+        }
+        if let Some(iter) = gbz.follow_backward(&state) {
+            let found: HashSet<BidirectionalState> = iter.collect();
+            assert_eq!(found, truth, "Invalid predecessors from {:?}", state);
+            for succ in found.iter() {
+                if !visited.contains(succ) {
+                    stack.push(succ.clone());
+                    visited.insert(succ.clone());
+                }
+            }
+        } else {
+            panic!("Could not follow paths backward from {:?}", state);
+        }
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -172,6 +242,13 @@ fn paths() {
         vec![(21, Orientation::Forward), (22, Orientation::Forward), (24, Orientation::Forward), (25, Orientation::Forward)],
     ];
     check_paths(&gbz, &paths);
+}
+
+#[test]
+fn states() {
+    let filename = support::get_test_data("example.gbz");
+    let gbz: GBZ = serialize::load_from(&filename).unwrap();
+    check_states(&gbz);
 }
 
 #[test]
@@ -257,6 +334,13 @@ fn paths_trans() {
 }
 
 #[test]
+fn states_trans() {
+    let filename = support::get_test_data("translation.gbz");
+    let gbz: GBZ = serialize::load_from(&filename).unwrap();
+    check_states(&gbz);
+}
+
+#[test]
 fn segments() {
     let filename = support::get_test_data("translation.gbz");
     let gbz: GBZ = serialize::load_from(&filename).unwrap();
@@ -307,7 +391,7 @@ fn links() {
     // Validate the links.
     for segment in gbz.segment_iter().unwrap() {
         for orientation in [Orientation::Forward, Orientation::Reverse] {
-            let name = if orientation == Orientation::Forward { "(forward)" } else { "(reverse)" };
+            let name = name(orientation);
             let truth = predecessors.get(&(segment.id, orientation)).unwrap();
 
             if let Some(iter) = gbz.segment_predecessors(&segment, orientation) {
@@ -361,7 +445,7 @@ fn segment_paths() {
     // Check the segments on the paths.
     for id in 0..gbz.paths() {
         for orientation in [Orientation::Forward, Orientation::Reverse] {
-            let name = if orientation == Orientation::Forward { "(forward)" } else { "(reverse)" };
+            let name = name(orientation);
             for (s, _) in gbz.segment_path(id, orientation).unwrap() {
                 assert_eq!(s, gbz.graph.segment(s.id), "Invalid segment {} on path {} {}", s.id, id, name);
             }

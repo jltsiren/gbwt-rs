@@ -7,7 +7,7 @@
 //! See also the [C++ implementation](https://github.com/jltsiren/gbwtgraph) and the [file format specification](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
 
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
-use crate::{Graph, Segment, GBWT, Orientation};
+use crate::{Graph, Segment, GBWT, BidirectionalState, Orientation};
 use crate::bwt::Record;
 use crate::gbwt::{SequenceIter, Metadata};
 use crate::graph::SegmentIter as GraphSegmentIter;
@@ -44,7 +44,7 @@ mod tests;
 ///
 /// # Examples
 ///
-/// See also: [`NodeIter`], [`EdgeIter`], [`SegmentIter`], [`LinkIter`], [`PathIter`], [`SegmentPathIter`]
+/// See also: [`NodeIter`], [`EdgeIter`], [`StateIter`], [`SegmentIter`], [`LinkIter`], [`PathIter`], [`SegmentPathIter`]
 ///
 /// ## Nodes
 ///
@@ -335,7 +335,6 @@ impl GBZ {
 
 //-----------------------------------------------------------------------------
 
-// FIXME follow_forward, follow_backward using EdgeIter and a separate implementation of bidirectional search
 /// Paths.
 impl GBZ {
     /// Returns the number of paths in the original graph.
@@ -390,6 +389,53 @@ impl GBZ {
     /// Returns the metadata stored in the GBWT index, or [`None`] if there is no metadata.
     pub fn metadata(&self) -> Option<&Metadata> {
         self.index.metadata()
+    }
+
+    /// Returns a search state corresponding to the given node and orientation, or [`None`] if there is no such node.
+    ///
+    /// See [`StateIter`] for an example.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id`: Node identifier in the original graph.
+    /// * `orientation`: Orientation of the node.
+    pub fn search_state(&self, node_id: usize, orientation: Orientation) -> Option<BidirectionalState> {
+        self.index.bd_find(support::encode_node(node_id, orientation))
+    }
+
+    /// Returns an iterator of all non-empty forward extensions of the search state.
+    ///
+    /// The return value is [`None`] if the last node on the corresponding path does not exist.
+    /// Each forward extension extends the path corresponding to the initial state by a single node.
+    /// An extension is empty if the corresponding path is not a subpath of any path in the GBWT index.
+    /// See [`StateIter`] for an example.
+    pub fn follow_forward(&self, state: &BidirectionalState) -> Option<StateIter> {
+        let (node_id, orientation) = support::decode_node(state.forward.node);
+        let iter = self.successors(node_id, orientation)?;
+        Some(StateIter {
+            parent: self,
+            iter: iter,
+            state: state.clone(),
+            flip: false,
+        })
+    }
+
+    /// Returns an iterator of all non-empty backward extensions of the search state.
+    ///
+    /// The return value is [`None`] if the first node on the corresponding path does not exist.
+    /// Each backward extension extends the path corresponding to the initial state by a single node.
+    /// An extension is empty if the corresponding path is not a subpath of any path in the GBWT index.
+    /// See [`StateIter`] for an example.
+    pub fn follow_backward(&self, state: &BidirectionalState) -> Option<StateIter> {
+        let state = state.flip();
+        let (node_id, orientation) = support::decode_node(state.forward.node);
+        let iter = self.successors(node_id, orientation)?;
+        Some(StateIter {
+            parent: self,
+            iter: iter,
+            state: state,
+            flip: true,
+        })
     }
 }
 
@@ -471,6 +517,7 @@ impl AsRef<Graph> for GBZ {
 
 /// An iterator over the node identifiers in the original graph.
 ///
+/// The type of `Item` is [`usize`].
 /// Because the GBZ stores a subgraph induced by the paths, nodes that are not visited by any path will be skipped.
 ///
 /// # Examples
@@ -888,5 +935,88 @@ impl<'a> Iterator for SegmentPathIter<'a> {
 }
 
 impl<'a> FusedIterator for SegmentPathIter<'a> {}
+
+//-----------------------------------------------------------------------------
+
+/// An iterator over the predecessors or successors of a search state.
+///
+/// The type of `Item` is [`BidirectionalState`].
+/// `StateIter` iterates over all non-empty single-node extensions of the initial state in the desired direction.
+/// Values are listed in the same order as by [`EdgeIter`].
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::{GBZ, Orientation, BidirectionalState};
+/// use gbwt::support;
+/// use simple_sds::serialize;
+///
+/// let filename = support::get_test_data("example.gbz");
+/// let gbz: GBZ = serialize::load_from(&filename).unwrap();
+///
+/// // Start from node 14 (forward).
+/// let state = gbz.search_state(14, Orientation::Forward).unwrap();
+/// assert_eq!(state.from(), (14, Orientation::Forward));
+/// assert_eq!(state.to(), (14, Orientation::Forward));
+/// assert_eq!(state.len(), 3);
+///
+/// // Find all successors of the initial state.
+/// let successors: Vec<BidirectionalState> = gbz.follow_forward(&state).unwrap().collect();
+/// assert_eq!(successors.len(), 2);
+///
+/// // Find all predecessors of the successors and store (from, to, len).
+/// let mut predecessors: Vec<((usize, Orientation), (usize, Orientation), usize)> = Vec::new();
+/// for state in successors.iter() {
+///     for pred in gbz.follow_backward(state).unwrap() {
+///         predecessors.push((pred.from(), pred.to(), pred.len()));
+///     }
+/// }
+/// assert_eq!(predecessors.len(), 2);
+/// assert_eq!(predecessors[0], ((12, Orientation::Forward), (15, Orientation::Forward), 2));
+/// assert_eq!(predecessors[1], ((13, Orientation::Forward), (16, Orientation::Forward), 1));
+/// ```
+#[derive(Clone, Debug)]
+pub struct StateIter<'a> {
+    parent: &'a GBZ,
+    // Iterator for the successors of the last node.
+    iter: EdgeIter<'a>,
+    // Search state in the relevant orientation (already flipped for predecessors).
+    state: BidirectionalState,
+    // Flip the results (we are extending backward).
+    flip: bool,
+}
+
+impl<'a> Iterator for StateIter<'a> {
+    type Item = BidirectionalState;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((node_id, orientation)) = self.iter.next() {
+            let gbwt_node = support::encode_node(node_id, orientation);
+            if let Some(state) = GBWT::bd_internal(&self.iter.record, &self.state, gbwt_node) {
+                return if self.flip { Some(state.flip())} else { Some(state) };
+            }
+        }
+        None
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.iter.len()))
+    }
+}
+
+impl<'a> DoubleEndedIterator for StateIter<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        while let Some((node_id, orientation)) = self.iter.next_back() {
+            let gbwt_node = support::encode_node(node_id, orientation);
+            if let Some(state) = GBWT::bd_internal(&self.iter.record, &self.state, gbwt_node) {
+                return if self.flip { Some(state.flip())} else { Some(state) };
+            }
+        }
+        None
+    }
+}
+
+impl<'a> FusedIterator for StateIter<'a> {}
 
 //-----------------------------------------------------------------------------
