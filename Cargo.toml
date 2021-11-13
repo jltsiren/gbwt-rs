@@ -9,7 +9,7 @@ readme = "README.md"
 repository = "https://github.com/jltsiren/gbwt-rs"
 
 [features]
-bench = ["getopts", "libc", "rand"]
+binaries = ["getopts", "libc", "rand"]
 
 [dependencies]
 simple-sds = { git = "https://github.com/jltsiren/simple-sds", branch = "main" }
@@ -22,7 +22,7 @@ rand = "0.8"
 
 [[bin]]
 name = "benchmark"
-required-features = ["bench"]
+required-features = ["binaries"]
 test = false
 bench = false
 doc = false

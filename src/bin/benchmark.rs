@@ -1,7 +1,7 @@
-// use
-use gbwt::GBWT;
-use simple_sds::serialize::Serialize;
+use gbwt::{GBWT, Pos};
+use gbwt::internal;
 
+use simple_sds::serialize::Serialize;
 use simple_sds::serialize;
 
 use std::time::Instant;
@@ -9,8 +9,6 @@ use std::{env, process};
 
 use getopts::Options;
 use rand::Rng;
-
-mod utils;
 
 //-----------------------------------------------------------------------------
 
@@ -20,7 +18,7 @@ fn main() {
     if let Some(filename) = config.filename.as_ref() {
         println!("Loading GBWT index {}", filename);
         let index: GBWT = serialize::load_from(filename).unwrap();
-        let (size, units) = utils::readable_size(index.size_in_bytes());
+        let (size, units) = internal::readable_size(index.size_in_bytes());
         println!("Index size: {:.3} {}", size, units);
         if index.is_empty() {
             eprintln!("Cannot perform benchmarks with an empty index");
@@ -32,7 +30,7 @@ fn main() {
         unidirectional_search(&index, &queries);
     }
 
-    utils::report_memory_usage();
+    internal::report_memory_usage();
 }
 
 //-----------------------------------------------------------------------------
@@ -120,19 +118,18 @@ fn generate_queries(index: &GBWT, config: &Config) -> Vec<Vec<usize>> {
 
     while queries.len() < config.queries {
         let mut query: Vec<usize> = Vec::new();
-        let mut node = rng.gen_range(index.first_node()..index.alphabet_size());
-        let mut offset;
-        if let Some(state) = index.find(node) {
-            offset = rng.gen_range(0..state.len());
+        let mut curr = Pos::default();
+        curr.node = rng.gen_range(index.first_node()..index.alphabet_size());
+        if let Some(state) = index.find(curr.node) {
+            curr.offset = rng.gen_range(0..state.len());
         } else {
             continue;
         }
-        query.push(node);
+        query.push(curr.node);
         while query.len() < config.query_len {
-            if let Some(pos) = index.forward((node, offset)) {
-                node = pos.0;
-                offset = pos.1;
-                query.push(node);
+            if let Some(next) = index.forward(curr) {
+                query.push(next.node);
+                curr = next;
             } else {
                 break;
             }
@@ -159,7 +156,7 @@ fn unidirectional_search(index: &GBWT, queries: &[Vec<usize>]) {
         total_len += query.len();
         total_occs += state.len();
     }
-    utils::report_results(queries.len(), total_len, total_occs, now.elapsed());
+    internal::report_results(queries.len(), total_len, total_occs, now.elapsed());
 }
 
 //-----------------------------------------------------------------------------

@@ -24,6 +24,13 @@ pub mod graph;
 pub mod headers;
 pub mod support;
 
+// Shared internal code for the binaries.
+#[cfg(feature = "binaries")]
+#[doc(hidden)]
+pub mod internal;
+
+//-----------------------------------------------------------------------------
+
 pub use crate::bwt::Pos;
 pub use crate::gbwt::{GBWT, SearchState, BidirectionalState, Metadata, PathName};
 pub use crate::gbz::GBZ;
