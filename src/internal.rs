@@ -59,22 +59,21 @@ pub fn report_results(queries: usize, total_len: usize, total_occs: usize, durat
     let us = (duration.as_micros() as f64) / (queries as f64);
     let ns = (duration.as_nanos() as f64) / (total_len as f64);
     let occs = (total_occs as f64) / (queries as f64);
-    println!("Time:        {:.3} seconds ({:.3} us/query, {:.1} ns/node)", duration.as_secs_f64(), us, ns);
-    println!("Occurrences: {} total ({:.3} per query)", total_occs, occs);
-    println!("");
+    eprintln!("Time:        {:.3} seconds ({:.3} us/query, {:.1} ns/node)", duration.as_secs_f64(), us, ns);
+    eprintln!("Occurrences: {} total ({:.3} per query)", total_occs, occs);
+    eprintln!("");
 }
 
 pub fn report_memory_usage() {
     match peak_memory_usage() {
         Ok(bytes) => {
             let (size, unit) = readable_size(bytes);
-            println!("Peak memory usage: {:.3} {}", size, unit);
+            eprintln!("Peak memory usage: {:.3} {}", size, unit);
         },
         Err(f) => {
-            println!("{}", f);
+            eprintln!("{}", f);
         },
     }
-    println!("");
 }
 
 //-----------------------------------------------------------------------------

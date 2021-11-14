@@ -15,22 +15,22 @@ use rand::Rng;
 fn main() {
     let config = Config::new();
 
-    if let Some(filename) = config.filename.as_ref() {
-        println!("Loading GBWT index {}", filename);
-        let index: GBWT = serialize::load_from(filename).unwrap();
-        let (size, units) = internal::readable_size(index.size_in_bytes());
-        println!("Index size: {:.3} {}", size, units);
-        if index.is_empty() {
-            eprintln!("Cannot perform benchmarks with an empty index");
-            process::exit(1);
-        }
-        println!("");
-
-        let queries = generate_queries(&index, &config);
-        unidirectional_search(&index, &queries);
+    let filename = config.filename.as_ref().unwrap();
+    eprintln!("Loading GBWT index {}", filename);
+    let index: GBWT = serialize::load_from(filename).unwrap();
+    let (size, units) = internal::readable_size(index.size_in_bytes());
+    eprintln!("Index size: {:.3} {}", size, units);
+    if index.is_empty() {
+        eprintln!("Cannot perform benchmarks with an empty index");
+        process::exit(1);
     }
+    eprintln!("");
+
+    let queries = generate_queries(&index, &config);
+    unidirectional_search(&index, &queries);
 
     internal::report_memory_usage();
+    eprintln!("");
 }
 
 //-----------------------------------------------------------------------------
@@ -67,8 +67,8 @@ impl Config {
             query_len: Self::QUERY_LEN,
         };
         if matches.opt_present("h") {
-            let header = format!("Usage: {} [options] gbwt_file", program);
-            print!("{}", opts.usage(&header));
+            let header = format!("Usage: {} [options] graph.gbwt", program);
+            eprint!("{}", opts.usage(&header));
             process::exit(0);
         }
         if let Some(s) = matches.opt_str("n") {
@@ -101,8 +101,13 @@ impl Config {
                 },
             }
         }
+
         if !matches.free.is_empty() {
             config.filename = Some(matches.free[0].clone());
+        } else {
+            let header = format!("Usage: {} [options] graph.gbwt", program);
+            eprint!("{}", opts.usage(&header));
+            process::exit(1);
         }
 
         config
