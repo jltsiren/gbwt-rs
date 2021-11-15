@@ -26,3 +26,10 @@ required-features = ["binaries"]
 test = false
 bench = false
 doc = false
+
+[[bin]]
+name = "gbunzip"
+required-features = ["binaries"]
+test = false
+bench = false
+doc = false
