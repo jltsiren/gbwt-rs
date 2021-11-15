@@ -5,6 +5,7 @@ use gbwt::internal;
 use simple_sds::serialize::Serialize;
 use simple_sds::serialize;
 
+use std::fs::OpenOptions;
 use std::io::{Write, BufWriter};
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -54,6 +55,7 @@ fn main() -> Result<(), String> {
 
 pub struct Config {
     pub filename: Option<String>,
+    pub output: Option<String>,
     pub threads: usize,
     pub buffer_size: usize,
     pub verbose: bool,
@@ -71,12 +73,14 @@ impl Config {
         let mut opts = Options::new();
         opts.optopt("b", "buffer-size", "output buffer size in megabytes (default 8)", "INT");
         opts.optflag("h", "help", "print this help");
+        opts.optopt("o", "output", "write the GFA to a file instead of stdout", "FILE");
         opts.optopt("t", "threads", "number of threads for extracting paths (default 1)", "INT");
-        opts.optflag("v", "verbose", "write progress information");
+        opts.optflag("v", "verbose", "print progress information");
         let matches = opts.parse(&args[1..]).map_err(|x| x.to_string())?;
 
         let mut config = Config {
             filename: None,
+            output: None,
             threads: Self::MIN_THREADS,
             buffer_size: Self::BUFFER_SIZE,
             verbose: false,
@@ -98,6 +102,9 @@ impl Config {
             let header = format!("Usage: {} [options] graph.gbz > graph.gfa", program);
             eprint!("{}", opts.usage(&header));
             process::exit(0);
+        }
+        if let Some(s) = matches.opt_str("o") {
+            config.output = Some(s);
         }
         if let Some(s) = matches.opt_str("t") {
             match s.parse::<usize>() {
@@ -131,18 +138,25 @@ impl Config {
 //-----------------------------------------------------------------------------
 
 fn write_gfa(gbz: &Arc<GBZ>, config: &Config) -> io::Result<()> {
-    let stdout = io::stdout();
-    let mut buffer = BufWriter::with_capacity(config.buffer_size, stdout.lock());
+    if let Some(filename) = config.output.as_ref() {
+        let mut options = OpenOptions::new();
+        let file = options.create(true).write(true).truncate(true).open(filename)?;
+        write_gfa_impl(gbz, file, config)?;
+    } else {
+        let stdout = io::stdout();
+        write_gfa_impl(gbz, stdout.lock(), config)?;
+    }
+    Ok(())
+}
+
+fn write_gfa_impl<T: Write>(gbz: &Arc<GBZ>, output: T, config: &Config) -> io::Result<()> {
+    let mut buffer = BufWriter::with_capacity(config.buffer_size, output);
     buffer.write_all(b"H\tVN:Z:1.0\n")?;
     write_segments(gbz, &mut buffer, config)?;
     write_links(gbz, &mut buffer, config)?;
+    write_paths(gbz, &mut buffer, config)?;
+    write_walks(gbz, &mut buffer, config)?;
     buffer.flush()?;
-
-    let stdout = io::stdout();
-    let mut handle = stdout.lock();
-    write_paths(gbz, &mut handle, config)?;
-    write_walks(gbz, &mut handle, config)?;
-
     Ok(())
 }
 
