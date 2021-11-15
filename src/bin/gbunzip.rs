@@ -1,4 +1,5 @@
 use gbwt::{GBZ, Orientation};
+use gbwt::internal::ThreadPool;
 use gbwt::REF_SAMPLE;
 use gbwt::internal;
 
@@ -8,8 +9,8 @@ use simple_sds::serialize;
 use std::fs::OpenOptions;
 use std::io::{Write, BufWriter};
 use std::sync::Arc;
-use std::thread::JoinHandle;
-use std::time::Instant;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Instant, Duration};
 use std::{env, io, process, thread};
 
 use getopts::Options;
@@ -58,6 +59,7 @@ pub struct Config {
     pub output: Option<String>,
     pub threads: usize,
     pub buffer_size: usize,
+    pub path_order: bool,
     pub verbose: bool,
 }
 
@@ -74,6 +76,7 @@ impl Config {
         opts.optopt("b", "buffer-size", "output buffer size in megabytes (default 8)", "INT");
         opts.optflag("h", "help", "print this help");
         opts.optopt("o", "output", "write the GFA to a file instead of stdout", "FILE");
+        opts.optflag("p", "path-order", "write the paths in order (may be slower)");
         opts.optopt("t", "threads", "number of threads for extracting paths (default 1)", "INT");
         opts.optflag("v", "verbose", "print progress information");
         let matches = opts.parse(&args[1..]).map_err(|x| x.to_string())?;
@@ -83,6 +86,7 @@ impl Config {
             output: None,
             threads: Self::MIN_THREADS,
             buffer_size: Self::BUFFER_SIZE,
+            path_order: false,
             verbose: false,
         };
         if let Some(s) = matches.opt_str("b") {
@@ -105,6 +109,9 @@ impl Config {
         }
         if let Some(s) = matches.opt_str("o") {
             config.output = Some(s);
+        }
+        if matches.opt_present("p") {
+            config.path_order = true;
         }
         if let Some(s) = matches.opt_str("t") {
             match s.parse::<usize>() {
@@ -268,6 +275,12 @@ fn write_link<T: Write>(from: (&[u8], Orientation), to: (&[u8], Orientation), ou
 
 //-----------------------------------------------------------------------------
 
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+enum LineType {
+    PLine,
+    WLine,
+}
+
 fn write_paths<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io::Result<()> {
     let start = Instant::now();
     let metadata = gbz.metadata().unwrap();
@@ -278,32 +291,21 @@ fn write_paths<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io:
     }
     let ref_sample = ref_sample.unwrap();
     if config.verbose {
-        eprintln!("Writing paths");
+        if config.path_order {
+            eprintln!("Writing paths in the original order");
+        } else {
+            eprintln!("Writing paths");
+        }
     }
 
-    // Determine the identifiers of reference paths.
+    // Determine the identifiers of reference paths and write them as P-lines.
     let mut paths: Vec<usize> = Vec::new();
     for (path_id, path_name) in metadata.path_iter().enumerate() {
         if path_name.sample() == ref_sample {
             paths.push(path_id);
         }
     }
-
-    // Extract the paths in order using multiple threads.
-    let mut thread_pool = create_thread_pool(config.threads);
-    let mut next: usize = 0;
-    for &path_id in paths.iter() {
-        if thread_pool[next].is_some() {
-            join_thread(&mut thread_pool, next, output)?;
-        }
-        let private_ref = Arc::clone(&gbz);
-        let handle = thread::spawn(move || {
-            path_to_p_line(&private_ref, path_id)
-        });
-        thread_pool[next] = Some(handle);
-        next = (next + 1) % thread_pool.len();
-    }
-    join_thread_pool(&mut thread_pool, next, output)?;
+    write_lines(gbz, &paths, output, config, LineType::PLine)?;
 
     if config.verbose {
         eprintln!("Wrote {} paths in {:.3} seconds", paths.len(), start.elapsed().as_secs_f64());
@@ -311,7 +313,83 @@ fn write_paths<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io:
     Ok(())
 }
 
-fn path_to_p_line(gbz: &Arc<GBZ>, path_id: usize) -> Vec<u8> {
+fn write_walks<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io::Result<()> {
+    let start = Instant::now();
+    let metadata = gbz.metadata().unwrap();
+    let ref_sample = metadata.sample_id(REF_SAMPLE).unwrap_or(metadata.samples());
+    if config.verbose {
+        if config.path_order {
+            eprintln!("Writing walks in the original order");
+        } else {
+            eprintln!("Writing walks");
+        }
+    }
+
+    // Determine the identifiers of non-reference paths and write them as W-lines.
+    let mut paths: Vec<usize> = Vec::new();
+    for (path_id, path_name) in metadata.path_iter().enumerate() {
+        if path_name.sample() != ref_sample {
+            paths.push(path_id);
+        }
+    }
+    write_lines(gbz, &paths, output, config, LineType::WLine)?;
+
+    if config.verbose {
+        eprintln!("Wrote {} walks in {:.3} seconds", paths.len(), start.elapsed().as_secs_f64());
+    }
+    Ok(())
+}
+
+//-----------------------------------------------------------------------------
+
+fn write_lines<T: Write>(gbz: &Arc<GBZ>, paths: &Vec<usize>, output: &mut T, config: &Config, line_type: LineType) -> io::Result<()> {
+    let mut thread_pool: ThreadPool<Vec<u8>> = ThreadPool::new(config.threads);
+
+    let mut next: usize = 0;
+    for &path_id in paths.iter() {
+        if config.path_order {
+            if let Some(result) = thread_pool.join(next) {
+                output.write_all(&result)?;
+            }
+        } else {
+            // Poll every 5 ms if we have a thread that can be joined.
+            next = thread_pool.len();
+            while next >= thread_pool.len() {
+                if let Some((thread_id, result)) = thread_pool.try_join() {
+                    next = thread_id;
+                    if let Some(result) = result {
+                        output.write_all(&result)?;
+                    }
+                } else {
+                    thread::sleep(Duration::from_millis(5));
+                }
+            }
+        }
+        let private_ref = Arc::clone(&gbz);
+        let signal = thread_pool.signal(next);
+        let handle = thread::spawn(move || {
+            path_to_line(&private_ref, path_id, &signal, line_type)
+        });
+        thread_pool.insert(handle, next);
+        next = (next + 1) % thread_pool.len();
+    }
+
+    for result in thread_pool.join_all(next) {
+        output.write_all(&result)?;
+    }
+    Ok(())
+}
+
+fn path_to_line(gbz: &Arc<GBZ>, path_id: usize, signal: &Arc<AtomicBool>, line_type: LineType) -> Vec<u8> {
+    match line_type {
+        LineType::PLine => path_to_p_line(gbz, path_id, signal),
+        LineType::WLine => path_to_w_line(gbz, path_id, signal),
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+fn path_to_p_line(gbz: &Arc<GBZ>, path_id: usize, signal: &Arc<AtomicBool>) -> Vec<u8> {
     let mut len = 0;
     let mut buffer: Vec<u8> = Vec::new();
 
@@ -361,50 +439,13 @@ fn path_to_p_line(gbz: &Arc<GBZ>, path_id: usize) -> Vec<u8> {
         }
     }
     buffer.push(b'\n');
+    signal.store(true, Ordering::SeqCst);
     buffer
 }
 
 //-----------------------------------------------------------------------------
 
-fn write_walks<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io::Result<()> {
-    let start = Instant::now();
-    let metadata = gbz.metadata().unwrap();
-    let ref_sample = metadata.sample_id(REF_SAMPLE).unwrap_or(metadata.samples());
-    if config.verbose {
-        eprintln!("Writing walks");
-    }
-
-    // Determine the identifiers of non-reference paths.
-    let mut paths: Vec<usize> = Vec::new();
-    for (path_id, path_name) in metadata.path_iter().enumerate() {
-        if path_name.sample() != ref_sample {
-            paths.push(path_id);
-        }
-    }
-
-    // Extract the paths in order using multiple threads.
-    let mut thread_pool = create_thread_pool(config.threads);
-    let mut next: usize = 0;
-    for &path_id in paths.iter() {
-        if thread_pool[next].is_some() {
-            join_thread(&mut thread_pool, next, output)?;
-        }
-        let private_ref = Arc::clone(&gbz);
-        let handle = thread::spawn(move || {
-            path_to_w_line(&private_ref, path_id)
-        });
-        thread_pool[next] = Some(handle);
-        next = (next + 1) % thread_pool.len();
-    }
-    join_thread_pool(&mut thread_pool, next, output)?;
-
-    if config.verbose {
-        eprintln!("Wrote {} walks in {:.3} seconds", paths.len(), start.elapsed().as_secs_f64());
-    }
-    Ok(())
-}
-
-fn path_to_w_line(gbz: &Arc<GBZ>, path_id: usize) -> Vec<u8> {
+fn path_to_w_line(gbz: &Arc<GBZ>, path_id: usize, signal: &Arc<AtomicBool>) -> Vec<u8> {
     let mut buffer: Vec<u8> = Vec::new();
 
     let metadata = gbz.metadata().unwrap();
@@ -458,32 +499,8 @@ fn path_to_w_line(gbz: &Arc<GBZ>, path_id: usize) -> Vec<u8> {
     }
 
     buffer.push(b'\n');
+    signal.store(true, Ordering::SeqCst);
     buffer
-}
-
-//-----------------------------------------------------------------------------
-
-fn create_thread_pool(threads: usize) -> Vec<Option<JoinHandle<Vec<u8>>>> {
-    let mut thread_pool = Vec::new();
-    for _ in 0..threads {
-        thread_pool.push(None);
-    }
-    thread_pool
-}
-
-fn join_thread<T: Write>(thread_pool: &mut Vec<Option<JoinHandle<Vec<u8>>>>, next: usize, output: &mut T) -> io::Result<()> {
-    thread_pool.push(None);
-    let line = thread_pool.swap_remove(next).unwrap().join().unwrap();
-    output.write_all(&line)
-}
-
-fn join_thread_pool<T: Write>(thread_pool: &mut Vec<Option<JoinHandle<Vec<u8>>>>, next: usize, output: &mut T) -> io::Result<()> {
-    let mut next = next;
-    while thread_pool[next].is_some() {
-        join_thread(thread_pool, next, output)?;
-        next = (next + 1) % thread_pool.len();
-    }
-    Ok(())
 }
 
 //-----------------------------------------------------------------------------
