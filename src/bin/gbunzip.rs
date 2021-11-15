@@ -1,4 +1,4 @@
-use gbwt::{GBZ, Orientation, PathName};
+use gbwt::{GBZ, Orientation};
 use gbwt::REF_SAMPLE;
 use gbwt::internal;
 
@@ -6,8 +6,10 @@ use simple_sds::serialize::Serialize;
 use simple_sds::serialize;
 
 use std::io::{Write, BufWriter};
+use std::sync::Arc;
+use std::thread::JoinHandle;
 use std::time::Instant;
-use std::{env, io, process};
+use std::{env, io, process, thread};
 
 use getopts::Options;
 
@@ -22,6 +24,7 @@ fn main() -> Result<(), String> {
         eprintln!("Loading GBZ graph {}", filename);
     }
     let gbz: GBZ = serialize::load_from(filename).map_err(|x| x.to_string())?;
+    let gbz = Arc::new(gbz);
     if !gbz.has_metadata() {
         return Err("GFA decompression requires GBWT metadata".to_string());
     }
@@ -36,9 +39,7 @@ fn main() -> Result<(), String> {
         eprintln!("");
     }
 
-    let stdout = io::stdout();
-    let mut buffer = BufWriter::with_capacity(config.buffer_size, stdout.lock());
-    write_gfa(&gbz, &mut buffer, &config).map_err(|x| x.to_string())?;
+    write_gfa(&gbz, &config).map_err(|x| x.to_string())?;
 
     if config.verbose {
         eprintln!("");
@@ -53,11 +54,14 @@ fn main() -> Result<(), String> {
 
 pub struct Config {
     pub filename: Option<String>,
+    pub threads: usize,
     pub buffer_size: usize,
     pub verbose: bool,
 }
 
 impl Config {
+    const MIN_THREADS: usize = 1;
+    const MAX_THREADS: usize = 31;
     const BUFFER_SIZE: usize = 8 * 1048576;
 
     pub fn new() -> Result<Config, String> {
@@ -67,11 +71,13 @@ impl Config {
         let mut opts = Options::new();
         opts.optopt("b", "buffer-size", "output buffer size in megabytes (default 8)", "INT");
         opts.optflag("h", "help", "print this help");
+        opts.optopt("t", "threads", "number of threads for extracting paths (default 1)", "INT");
         opts.optflag("v", "verbose", "write progress information");
         let matches = opts.parse(&args[1..]).map_err(|x| x.to_string())?;
 
         let mut config = Config {
             filename: None,
+            threads: Self::MIN_THREADS,
             buffer_size: Self::BUFFER_SIZE,
             verbose: false,
         };
@@ -93,6 +99,19 @@ impl Config {
             eprint!("{}", opts.usage(&header));
             process::exit(0);
         }
+        if let Some(s) = matches.opt_str("t") {
+            match s.parse::<usize>() {
+                Ok(n) => {
+                    if !(Self::MIN_THREADS..=Self::MAX_THREADS).contains(&n) {
+                        return Err(format!("--threads: number of threads must be between {} and {}", Self::MIN_THREADS, Self::MAX_THREADS));
+                    }
+                    config.threads = n;
+                },
+                Err(f) => {
+                    return Err(format!("--threads: {}", f.to_string()));
+                },
+            }
+        }
         if matches.opt_present("v") {
             config.verbose = true;
         }
@@ -111,12 +130,19 @@ impl Config {
 
 //-----------------------------------------------------------------------------
 
-fn write_gfa<T: Write>(gbz: &GBZ, output: &mut T, config: &Config) -> io::Result<()> {
-    output.write_all(b"H\tVN:Z:1.0\n")?;
-    write_segments(gbz, output, config)?;
-    write_links(gbz, output, config)?;
-    write_paths(gbz, output, config)?;
-    write_walks(gbz, output, config)?;
+fn write_gfa(gbz: &Arc<GBZ>, config: &Config) -> io::Result<()> {
+    let stdout = io::stdout();
+    let mut buffer = BufWriter::with_capacity(config.buffer_size, stdout.lock());
+    buffer.write_all(b"H\tVN:Z:1.0\n")?;
+    write_segments(gbz, &mut buffer, config)?;
+    write_links(gbz, &mut buffer, config)?;
+    buffer.flush()?;
+
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    write_paths(gbz, &mut handle, config)?;
+    write_walks(gbz, &mut handle, config)?;
+
     Ok(())
 }
 
@@ -228,9 +254,8 @@ fn write_link<T: Write>(from: (&[u8], Orientation), to: (&[u8], Orientation), ou
 
 //-----------------------------------------------------------------------------
 
-fn write_paths<T: Write>(gbz: &GBZ, output: &mut T, config: &Config) -> io::Result<()> {
+fn write_paths<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io::Result<()> {
     let start = Instant::now();
-    let mut paths = 0;
     let metadata = gbz.metadata().unwrap();
     let ref_sample = metadata.sample_id(REF_SAMPLE);
     if ref_sample.is_none() {
@@ -242,35 +267,58 @@ fn write_paths<T: Write>(gbz: &GBZ, output: &mut T, config: &Config) -> io::Resu
         eprintln!("Writing paths");
     }
 
+    // Determine the identifiers of reference paths.
+    let mut paths: Vec<usize> = Vec::new();
     for (path_id, path_name) in metadata.path_iter().enumerate() {
         if path_name.sample() == ref_sample {
-            write_path(gbz, path_id, metadata.contig(path_name.contig()).unwrap(), output)?;
-            paths += 1;
+            paths.push(path_id);
         }
     }
 
+    // Extract the paths in order using multiple threads.
+    let mut thread_pool = create_thread_pool(config.threads);
+    let mut next: usize = 0;
+    for &path_id in paths.iter() {
+        if thread_pool[next].is_some() {
+            join_thread(&mut thread_pool, next, output)?;
+        }
+        let private_ref = Arc::clone(&gbz);
+        let handle = thread::spawn(move || {
+            path_to_p_line(&private_ref, path_id)
+        });
+        thread_pool[next] = Some(handle);
+        next = (next + 1) % thread_pool.len();
+    }
+    join_thread_pool(&mut thread_pool, next, output)?;
+
     if config.verbose {
-        eprintln!("Wrote {} paths in {:.3} seconds", paths, start.elapsed().as_secs_f64());
+        eprintln!("Wrote {} paths in {:.3} seconds", paths.len(), start.elapsed().as_secs_f64());
     }
     Ok(())
 }
 
-fn write_path<T: Write>(gbz: &GBZ, path_id: usize, path_name: &str, output: &mut T) -> io::Result<()> {
+fn path_to_p_line(gbz: &Arc<GBZ>, path_id: usize) -> Vec<u8> {
     let mut len = 0;
-    output.write_all(b"P\t")?;
-    output.write_all(path_name.as_bytes())?;
-    output.write_all(b"\t")?;
+    let mut buffer: Vec<u8> = Vec::new();
+
+    buffer.push(b'P');
+    buffer.push(b'\t');
+    let metadata = gbz.metadata().unwrap();
+    let path_name = metadata.path(path_id).unwrap();
+    let contig_name = metadata.contig(path_name.contig()).unwrap();
+    buffer.extend_from_slice(contig_name.as_bytes());
+    buffer.push(b'\t');
 
     match gbz.segment_path(path_id, Orientation::Forward) {
         Some(iter) => {
             for (segment, orientation) in iter {
                 if len > 0 {
-                    output.write_all(b",")?;
+                    buffer.push(b',');
                 }
-                output.write_all(segment.name)?;
+                buffer.extend_from_slice(segment.name);
                 match orientation {
-                    Orientation::Forward => output.write_all(b"+")?,
-                    Orientation::Reverse => output.write_all(b"-")?,
+                    Orientation::Forward => buffer.push(b'+'),
+                    Orientation::Reverse => buffer.push(b'-'),
                 }
                 len += 1;
             }
@@ -278,64 +326,85 @@ fn write_path<T: Write>(gbz: &GBZ, path_id: usize, path_name: &str, output: &mut
         None => {
             for (node_id, orientation) in gbz.path(path_id, Orientation::Forward).unwrap() {
                 if len > 0 {
-                    output.write_all(b",")?;
+                    buffer.push(b',');
                 }
-                output.write_all(node_id.to_string().as_bytes())?;
+                buffer.extend_from_slice(node_id.to_string().as_bytes());
                 match orientation {
-                    Orientation::Forward => output.write_all(b"+")?,
-                    Orientation::Reverse => output.write_all(b"-")?,
+                    Orientation::Forward => buffer.push(b'+'),
+                    Orientation::Reverse => buffer.push(b'-'),
                 }
                 len += 1;
             }
         },
     }
 
-    output.write_all(b"\t")?;
+    buffer.push(b'\t');
     if len > 1 {
-        output.write_all(b"*")?;
+        buffer.push(b'*');
         for _ in 2..len {
-            output.write_all(b",*")?;
+            buffer.push(b',');
+            buffer.push(b'*');
         }
     }
-    output.write_all(b"\n")?;
-    Ok(())
+    buffer.push(b'\n');
+    buffer
 }
 
 //-----------------------------------------------------------------------------
 
-fn write_walks<T: Write>(gbz: &GBZ, output: &mut T, config: &Config) -> io::Result<()> {
+fn write_walks<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io::Result<()> {
     let start = Instant::now();
-    let mut walks = 0;
     let metadata = gbz.metadata().unwrap();
     let ref_sample = metadata.sample_id(REF_SAMPLE).unwrap_or(metadata.samples());
     if config.verbose {
         eprintln!("Writing walks");
     }
 
+    // Determine the identifiers of non-reference paths.
+    let mut paths: Vec<usize> = Vec::new();
     for (path_id, path_name) in metadata.path_iter().enumerate() {
         if path_name.sample() != ref_sample {
-            write_walk(gbz, path_id, *path_name, output)?;
-            walks += 1;
+            paths.push(path_id);
         }
     }
 
+    // Extract the paths in order using multiple threads.
+    let mut thread_pool = create_thread_pool(config.threads);
+    let mut next: usize = 0;
+    for &path_id in paths.iter() {
+        if thread_pool[next].is_some() {
+            join_thread(&mut thread_pool, next, output)?;
+        }
+        let private_ref = Arc::clone(&gbz);
+        let handle = thread::spawn(move || {
+            path_to_w_line(&private_ref, path_id)
+        });
+        thread_pool[next] = Some(handle);
+        next = (next + 1) % thread_pool.len();
+    }
+    join_thread_pool(&mut thread_pool, next, output)?;
+
     if config.verbose {
-        eprintln!("Wrote {} walks in {:.3} seconds", walks, start.elapsed().as_secs_f64());
+        eprintln!("Wrote {} walks in {:.3} seconds", paths.len(), start.elapsed().as_secs_f64());
     }
     Ok(())
 }
 
-fn write_walk<T: Write>(gbz: &GBZ, path_id: usize, path_name: PathName, output: &mut T) -> io::Result<()> {
+fn path_to_w_line(gbz: &Arc<GBZ>, path_id: usize) -> Vec<u8> {
+    let mut buffer: Vec<u8> = Vec::new();
+
     let metadata = gbz.metadata().unwrap();
-    output.write_all(b"W\t")?;
-    output.write_all(metadata.sample(path_name.sample()).unwrap().as_bytes())?;
-    output.write_all(b"\t")?;
-    output.write_all(path_name.phase().to_string().as_bytes())?;
-    output.write_all(b"\t")?;
-    output.write_all(metadata.contig(path_name.contig()).unwrap().as_bytes())?;
-    output.write_all(b"\t")?;
-    output.write_all(path_name.fragment().to_string().as_bytes())?;
-    output.write_all(b"\t")?;
+    let path_name = metadata.path(path_id).unwrap();
+    buffer.push(b'W');
+    buffer.push(b'\t');
+    buffer.extend_from_slice(metadata.sample(path_name.sample()).unwrap().as_bytes());
+    buffer.push(b'\t');
+    buffer.extend_from_slice(path_name.phase().to_string().as_bytes());
+    buffer.push(b'\t');
+    buffer.extend_from_slice(metadata.contig(path_name.contig()).unwrap().as_bytes());
+    buffer.push(b'\t');
+    buffer.extend_from_slice(path_name.fragment().to_string().as_bytes());
+    buffer.push(b'\t');
 
     match gbz.segment_path(path_id, Orientation::Forward) {
         Some(iter) => {
@@ -345,14 +414,14 @@ fn write_walk<T: Write>(gbz: &GBZ, path_id: usize, path_name: PathName, output: 
                 path.push((segment.name, orientation));
                 len += segment.sequence.len();
             }
-            output.write_all((path_name.fragment() + len).to_string().as_bytes())?;
-            output.write_all(b"\t")?;
+            buffer.extend_from_slice((path_name.fragment() + len).to_string().as_bytes());
+            buffer.push(b'\t');
             for (name, orientation) in path.iter() {
                 match orientation {
-                    Orientation::Forward => output.write_all(b">")?,
-                    Orientation::Reverse => output.write_all(b"<")?,
+                    Orientation::Forward => buffer.push(b'>'),
+                    Orientation::Reverse => buffer.push(b'<'),
                 }
-                output.write_all(name)?;
+                buffer.extend_from_slice(name);
             }
         },
         None => {
@@ -362,19 +431,44 @@ fn write_walk<T: Write>(gbz: &GBZ, path_id: usize, path_name: PathName, output: 
                 path.push((node_id, orientation));
                 len += gbz.sequence_len(node_id).unwrap_or(0);
             }
-            output.write_all((path_name.fragment() + len).to_string().as_bytes())?;
-            output.write_all(b"\t")?;
+            buffer.extend_from_slice((path_name.fragment() + len).to_string().as_bytes());
+            buffer.push(b'\t');
             for (node_id, orientation) in path.iter() {
                 match orientation {
-                    Orientation::Forward => output.write_all(b">")?,
-                    Orientation::Reverse => output.write_all(b"<")?,
+                    Orientation::Forward => buffer.push(b'>'),
+                    Orientation::Reverse => buffer.push(b'<'),
                 }
-                output.write_all(node_id.to_string().as_bytes())?;
+                buffer.extend_from_slice(node_id.to_string().as_bytes());
             }
         },
     }
 
-    output.write_all(b"\n")?;
+    buffer.push(b'\n');
+    buffer
+}
+
+//-----------------------------------------------------------------------------
+
+fn create_thread_pool(threads: usize) -> Vec<Option<JoinHandle<Vec<u8>>>> {
+    let mut thread_pool = Vec::new();
+    for _ in 0..threads {
+        thread_pool.push(None);
+    }
+    thread_pool
+}
+
+fn join_thread<T: Write>(thread_pool: &mut Vec<Option<JoinHandle<Vec<u8>>>>, next: usize, output: &mut T) -> io::Result<()> {
+    thread_pool.push(None);
+    let line = thread_pool.swap_remove(next).unwrap().join().unwrap();
+    output.write_all(&line)
+}
+
+fn join_thread_pool<T: Write>(thread_pool: &mut Vec<Option<JoinHandle<Vec<u8>>>>, next: usize, output: &mut T) -> io::Result<()> {
+    let mut next = next;
+    while thread_pool[next].is_some() {
+        join_thread(thread_pool, next, output)?;
+        next = (next + 1) % thread_pool.len();
+    }
     Ok(())
 }
 

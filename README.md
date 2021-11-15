@@ -24,7 +24,6 @@ It is based on the [Simple-SDS](https://github.com/jltsiren/simple-sds) library.
 
 ### Possible future extensions
 
-* Multithreaded GFA extraction
 * GBWT construction
 * GBWT merging
 * Cached GBWT
