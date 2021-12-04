@@ -1,5 +1,9 @@
 # GBWT-rs releases
 
+## Current version
+
+* Support for empty paths.
+
 ## GBWT-rs 0.2.0 (2021-11-17)
 
 * `Graph`: GBWTGraph implementation storing node sequences and node-to-segment translation.

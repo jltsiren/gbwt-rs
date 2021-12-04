@@ -9,18 +9,15 @@ use std::convert::TryFrom;
 
 //-----------------------------------------------------------------------------
 
-#[test]
-fn statistics() {
-    let filename = support::get_test_data("example.gbwt");
-    let index: GBWT = serialize::load_from(&filename).unwrap();
-
-    assert_eq!(index.len(), 68, "Invalid total length");
+// Assumes a non-empty bidirectional GBWT.
+fn check_statistics(index: &GBWT, len: usize, sequences: usize, alphabet_size: usize, alphabet_offset: usize) {
+    assert_eq!(index.len(), len, "Invalid total length");
     assert!(!index.is_empty(), "Invalid emptiness");
-    assert_eq!(index.sequences(), 12, "Invalid number of sequences");
-    assert_eq!(index.alphabet_size(), 52, "Invalid alphabet size");
-    assert_eq!(index.alphabet_offset(), 21, "Invalid alphabet offset");
-    assert_eq!(index.effective_size(), 31, "Invalid effective alphabet size");
-    assert_eq!(index.first_node(), 22, "Invalid first node id");
+    assert_eq!(index.sequences(), sequences, "Invalid number of sequences");
+    assert_eq!(index.alphabet_size(), alphabet_size, "Invalid alphabet size");
+    assert_eq!(index.alphabet_offset(), alphabet_offset, "Invalid alphabet offset");
+    assert_eq!(index.effective_size(), alphabet_size - alphabet_offset, "Invalid effective alphabet size");
+    assert_eq!(index.first_node(), alphabet_offset + 1, "Invalid first node id");
     assert!(index.is_bidirectional(), "Index is not bidirectional");
 
     for i in 0..index.first_node() {
@@ -45,6 +42,20 @@ fn statistics() {
 }
 
 #[test]
+fn statistics() {
+    let filename = support::get_test_data("example.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
+    check_statistics(&index, 68, 12, 52, 21);
+}
+
+#[test]
+fn statistics_with_empty() {
+    let filename = support::get_test_data("with-empty.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
+    check_statistics(&index, 70, 14, 52, 21);
+}
+
+#[test]
 fn index_metadata() {
     let gbwt_filename = support::get_test_data("example.gbwt");
     let index: GBWT = serialize::load_from(&gbwt_filename).unwrap();
@@ -62,14 +73,21 @@ fn serialize() {
     serialize::test(&index, "gbwt", None, true);
 }
 
+#[test]
+fn serialize_with_empty() {
+    let filename = support::get_test_data("with-empty.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
+    serialize::test(&index, "gbwt-with-empty", None, true);
+}
+
 //-----------------------------------------------------------------------------
 
 fn extract_sequence(index: &GBWT, id: usize) -> Vec<usize> {
     let mut result = Vec::new();
     let mut pos = index.start(id);
-    while pos != None {
-        result.push(pos.unwrap().node);
-        pos = index.forward(pos.unwrap());
+    while let Some(p) = pos {
+        result.push(p.node);
+        pos = index.forward(p);
     }
     result
 }
@@ -77,71 +95,73 @@ fn extract_sequence(index: &GBWT, id: usize) -> Vec<usize> {
 fn extract_backward(index: &GBWT, id: usize) -> Vec<usize> {
     let mut last = None;
     let mut pos = index.start(id);
-    while pos != None {
+    while let Some(p) = pos {
         last = pos;
-        pos = index.forward(pos.unwrap());
+        pos = index.forward(p);
     }
 
     let mut result = Vec::new();
     pos = last;
-    while pos != None {
-        result.push(pos.unwrap().node);
-        pos = index.backward(pos.unwrap());
+    while let Some(p) = pos {
+        result.push(p.node);
+        pos = index.backward(p);
     }
 
     result
 }
 
-fn true_paths() -> Vec<Vec<usize>> {
-    vec![
-        vec![
-            support::encode_node(11, Orientation::Forward),
-            support::encode_node(12, Orientation::Forward),
-            support::encode_node(14, Orientation::Forward),
-            support::encode_node(15, Orientation::Forward),
-            support::encode_node(17, Orientation::Forward)
-        ],
-        vec![
-            support::encode_node(21, Orientation::Forward),
-            support::encode_node(22, Orientation::Forward),
-            support::encode_node(24, Orientation::Forward),
-            support::encode_node(25, Orientation::Forward)
-        ],
-        vec![
-            support::encode_node(11, Orientation::Forward),
-            support::encode_node(12, Orientation::Forward),
-            support::encode_node(14, Orientation::Forward),
-            support::encode_node(15, Orientation::Forward),
-            support::encode_node(17, Orientation::Forward)
-        ],
-        vec![
-            support::encode_node(11, Orientation::Forward),
-            support::encode_node(13, Orientation::Forward),
-            support::encode_node(14, Orientation::Forward),
-            support::encode_node(16, Orientation::Forward),
-            support::encode_node(17, Orientation::Forward)
-        ],
-        vec![
-            support::encode_node(21, Orientation::Forward),
-            support::encode_node(22, Orientation::Forward), 
-            support::encode_node(24, Orientation::Forward),
-            support::encode_node(23, Orientation::Reverse),
-            support::encode_node(21, Orientation::Reverse)
-        ],
-        vec![
-            support::encode_node(21, Orientation::Forward),
-            support::encode_node(22, Orientation::Forward),
-            support::encode_node(24, Orientation::Forward),
-            support::encode_node(25, Orientation::Forward)
-        ],
-    ]
+fn true_paths(with_empty: bool) -> Vec<Vec<usize>> {
+    let mut result = Vec::new();
+    result.push(vec![
+        support::encode_node(11, Orientation::Forward),
+        support::encode_node(12, Orientation::Forward),
+        support::encode_node(14, Orientation::Forward),
+        support::encode_node(15, Orientation::Forward),
+        support::encode_node(17, Orientation::Forward)
+    ]);
+    result.push(vec![
+        support::encode_node(21, Orientation::Forward),
+        support::encode_node(22, Orientation::Forward),
+        support::encode_node(24, Orientation::Forward),
+        support::encode_node(25, Orientation::Forward)
+    ]);
+    result.push(vec![
+        support::encode_node(11, Orientation::Forward),
+        support::encode_node(12, Orientation::Forward),
+        support::encode_node(14, Orientation::Forward),
+        support::encode_node(15, Orientation::Forward),
+        support::encode_node(17, Orientation::Forward)
+    ]);
+    result.push(vec![
+        support::encode_node(11, Orientation::Forward),
+        support::encode_node(13, Orientation::Forward),
+        support::encode_node(14, Orientation::Forward),
+        support::encode_node(16, Orientation::Forward),
+        support::encode_node(17, Orientation::Forward)
+    ]);
+    if with_empty {
+        result.push(Vec::new());
+    }
+    result.push(vec![
+        support::encode_node(21, Orientation::Forward),
+        support::encode_node(22, Orientation::Forward),
+        support::encode_node(24, Orientation::Forward),
+        support::encode_node(23, Orientation::Reverse),
+        support::encode_node(21, Orientation::Reverse)
+    ]);
+    result.push(vec![
+        support::encode_node(21, Orientation::Forward),
+        support::encode_node(22, Orientation::Forward),
+        support::encode_node(24, Orientation::Forward),
+        support::encode_node(25, Orientation::Forward)
+    ]);
+    result
 }
 
-#[test]
-fn extract() {
-    let filename = support::get_test_data("example.gbwt");
+fn test_extract(test_file: &'static str, with_empty: bool) {
+    let filename = support::get_test_data(test_file);
     let index: GBWT = serialize::load_from(&filename).unwrap();
-    let truth = true_paths();
+    let truth = true_paths(with_empty);
 
     for i in 0..index.sequences() / 2 {
         let forward = extract_sequence(&index, support::encode_node(i, Orientation::Forward));
@@ -156,8 +176,17 @@ fn extract() {
 }
 
 #[test]
-fn backward() {
-    let filename = support::get_test_data("example.gbwt");
+fn extract() {
+    test_extract("example.gbwt", false);
+}
+
+#[test]
+fn extract_with_empty() {
+    test_extract("with-empty.gbwt", true);
+}
+
+fn test_backward(test_file: &'static str) {
+    let filename = support::get_test_data(test_file);
     let index: GBWT = serialize::load_from(&filename).unwrap();
 
     for i in 0..index.sequences() {
@@ -172,8 +201,17 @@ fn backward() {
 }
 
 #[test]
-fn sequence() {
-    let filename = support::get_test_data("example.gbwt");
+fn backward() {
+    test_backward("example.gbwt");
+}
+
+#[test]
+fn backward_with_empty() {
+    test_backward("with-empty.gbwt");
+}
+
+fn test_sequence(test_file: &'static str) {
+    let filename = support::get_test_data(test_file);
     let index: GBWT = serialize::load_from(&filename).unwrap();
 
     for i in 0..index.sequences() {
@@ -184,6 +222,16 @@ fn sequence() {
         assert_eq!(iterated, extracted, "Invalid sequence {} from an iterator", i);
     }
     assert!(index.sequence(index.sequences()).is_none(), "Got an iterator for a past-the-end sequence id");
+}
+
+#[test]
+fn sequence() {
+    test_sequence("example.gbwt");
+}
+
+#[test]
+fn sequence_with_empty() {
+    test_sequence("with-empty.gbwt");
 }
 
 //-----------------------------------------------------------------------------
@@ -214,9 +262,8 @@ fn count_occurrences(paths: &[Vec<usize>], subpath: &[usize]) -> usize {
     result
 }
 
-#[test]
-fn find() {
-    let filename = support::get_test_data("example.gbwt");
+fn test_find(test_file: &'static str) {
+    let filename = support::get_test_data(test_file);
     let index: GBWT = serialize::load_from(&filename).unwrap();
     let nodes = true_nodes();
 
@@ -232,11 +279,20 @@ fn find() {
 }
 
 #[test]
-fn extend() {
-    let filename = support::get_test_data("example.gbwt");
+fn find() {
+    test_find("example.gbwt");
+}
+
+#[test]
+fn find_with_empty() {
+    test_find("with-empty.gbwt");
+}
+
+fn test_extend(test_file: &'static str, with_empty: bool) {
+    let filename = support::get_test_data(test_file);
     let index: GBWT = serialize::load_from(&filename).unwrap();
     let nodes = true_nodes();
-    let paths = true_paths();
+    let paths = true_paths(with_empty);
 
     // Check all possible and impossible extensions of the initial node.
     for &first in nodes.iter() {
@@ -280,6 +336,16 @@ fn extend() {
     }
 }
 
+#[test]
+fn extend() {
+    test_extend("example.gbwt", false);
+}
+
+#[test]
+fn extend_with_empty() {
+    test_extend("with-empty.gbwt", true);
+}
+
 //-----------------------------------------------------------------------------
 
 fn bd_search(index: &GBWT, path: &[usize], first: usize, range: Range<usize>) -> Option<BidirectionalState> {
@@ -293,9 +359,8 @@ fn bd_search(index: &GBWT, path: &[usize], first: usize, range: Range<usize>) ->
     Some(state)
 }
 
-#[test]
-fn bd_find() {
-    let filename = support::get_test_data("example.gbwt");
+fn test_bd_find(test_file: &'static str) {
+    let filename = support::get_test_data(test_file);
     let index: GBWT = serialize::load_from(&filename).unwrap();
     let nodes = true_nodes();
 
@@ -313,11 +378,20 @@ fn bd_find() {
 }
 
 #[test]
-fn bd_extend() {
-    let filename = support::get_test_data("example.gbwt");
+fn bd_find() {
+    test_bd_find("example.gbwt");
+}
+
+#[test]
+fn bd_find_with_empty() {
+    test_bd_find("with-empty.gbwt");
+}
+
+fn test_bd_extend(test_file: &'static str, with_empty: bool) {
+    let filename = support::get_test_data(test_file);
     let index: GBWT = serialize::load_from(&filename).unwrap();
     let nodes = true_nodes();
-    let paths = true_paths();
+    let paths = true_paths(with_empty);
 
     // Check all possible and impossible extensions of the initial node.
     for &first in nodes.iter() {
@@ -372,6 +446,16 @@ fn bd_extend() {
             }
         }
     }
+}
+
+#[test]
+fn bd_extend() {
+    test_bd_extend("example.gbwt", false);
+}
+
+#[test]
+fn bd_extend_with_empty() {
+    test_bd_extend("with-empty.gbwt", true);
 }
 
 //-----------------------------------------------------------------------------

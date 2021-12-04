@@ -194,9 +194,11 @@ impl AsRef<BWT> for GBWT {
 
 /// Sequence navigation.
 impl GBWT {
-    /// Returns the first position in sequence `id`, or [`None`] if no such sequence exists.
+    /// Returns the first position in sequence `id`.
+    ///
+    /// The return value is[`None`] if no such sequence exists or the sequence is empty.
     pub fn start(&self, id: usize) -> Option<Pos> {
-        if id < self.endmarker.len() {
+        if id < self.endmarker.len() && self.endmarker[id].node != ENDMARKER {
             Some(self.endmarker[id])
         } else {
             None
@@ -236,10 +238,12 @@ impl GBWT {
 
     /// Returns an iterator over sequence `id`, or [`None`] if there is no such sequence.
     pub fn sequence(&self, id: usize) -> Option<SequenceIter> {
-        let start = self.start(id)?;
+        if id >= self.sequences() {
+            return None;
+        }
         Some(SequenceIter {
             parent: self,
-            next: Some(start),
+            next: self.start(id),
         })
     }
 }
