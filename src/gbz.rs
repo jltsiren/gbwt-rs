@@ -413,7 +413,6 @@ impl GBZ {
         let (node_id, orientation) = support::decode_node(state.forward.node);
         let iter = self.successors(node_id, orientation)?;
         Some(StateIter {
-            parent: self,
             iter: iter,
             state: state.clone(),
             flip: false,
@@ -431,7 +430,6 @@ impl GBZ {
         let (node_id, orientation) = support::decode_node(state.forward.node);
         let iter = self.successors(node_id, orientation)?;
         Some(StateIter {
-            parent: self,
             iter: iter,
             state: state,
             flip: true,
@@ -977,7 +975,6 @@ impl<'a> FusedIterator for SegmentPathIter<'a> {}
 /// ```
 #[derive(Clone, Debug)]
 pub struct StateIter<'a> {
-    parent: &'a GBZ,
     // Iterator for the successors of the last node.
     iter: EdgeIter<'a>,
     // Search state in the relevant orientation (already flipped for predecessors).
