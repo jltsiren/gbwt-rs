@@ -11,6 +11,13 @@
 //! Bioinformatics 36(2):400-407, 2020.
 //! DOI: [10.1093/bioinformatics/btz575](https://doi.org/10.1093/bioinformatics/btz575)
 //!
+//! ### GBWTGraph
+//!
+//! Jouni Sirén, Jean Monlong, Xian Chang, Adam M. Novak, Jordan M. Eizenga, Charles Markello, Jonas A. Sibbesen, Glenn Hickey, Pi-Chuan Chang, Andrew Carroll, Namrata Gupta, Stacey Gabriel, Thomas W. Blackwell, Aakrosh Ratan, Kent D. Taylor, Stephen S. Rich, Jerome I. Rotter, David Haussler, Erik Garrison, and Benedict Paten:\
+//! **Pangenomics enables genotyping of known structural variants in 5202 diverse genomes**.\
+//! Science 374(6574):abg8871, 2021.
+//! DOI: [10.1126/science.abg8871](https://doi.org/10.1126/science.abg8871)
+//!
 //! # Notes
 //!
 //! * See [Simple-SDS](https://github.com/jltsiren/simple-sds) for assumptions on the environment.

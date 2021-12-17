@@ -990,7 +990,7 @@ impl<'a> Iterator for StateIter<'a> {
         while let Some((node_id, orientation)) = self.iter.next() {
             let gbwt_node = support::encode_node(node_id, orientation);
             if let Some(state) = GBWT::bd_internal(&self.iter.record, &self.state, gbwt_node) {
-                return if self.flip { Some(state.flip())} else { Some(state) };
+                return if self.flip { Some(state.flip()) } else { Some(state) };
             }
         }
         None
@@ -1007,7 +1007,7 @@ impl<'a> DoubleEndedIterator for StateIter<'a> {
         while let Some((node_id, orientation)) = self.iter.next_back() {
             let gbwt_node = support::encode_node(node_id, orientation);
             if let Some(state) = GBWT::bd_internal(&self.iter.record, &self.state, gbwt_node) {
-                return if self.flip { Some(state.flip())} else { Some(state) };
+                return if self.flip { Some(state.flip()) } else { Some(state) };
             }
         }
         None
