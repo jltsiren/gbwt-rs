@@ -9,13 +9,14 @@ readme = "README.md"
 repository = "https://github.com/jltsiren/gbwt-rs"
 
 [features]
-binaries = ["getopts", "libc", "rand"]
+binaries = ["getopts", "libc", "rand", "rayon"]
 
 [dependencies]
 simple-sds = { git = "https://github.com/jltsiren/simple-sds", branch = "main" }
 getopts = { version = "0.2", optional = true }
 libc = { version = "0.2", optional = true }
 rand = { version = "0.8", optional = true }
+rayon = { version = "1.5", optional = true }
 
 [dev-dependencies]
 rand = "0.8"

@@ -1,5 +1,4 @@
 use gbwt::{GBZ, Orientation};
-use gbwt::internal::ThreadPool;
 use gbwt::REF_SAMPLE;
 use gbwt::internal;
 
@@ -8,25 +7,25 @@ use simple_sds::serialize;
 
 use std::fs::OpenOptions;
 use std::io::{Write, BufWriter};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Instant, Duration};
-use std::{env, io, process, thread};
+use std::sync::Mutex;
+use std::time::Instant;
+use std::{env, io, process};
 
 use getopts::Options;
+use rayon::prelude::*;
 
 //-----------------------------------------------------------------------------
 
 fn main() -> Result<(), String> {
     let start = Instant::now();
     let config = Config::new().map_err(|x| x.to_string())?;
+    rayon::ThreadPoolBuilder::new().num_threads(config.threads).build_global().map_err(|e| e.to_string())?;
 
     let filename = config.filename.as_ref().unwrap();
     if config.verbose {
         eprintln!("Loading GBZ graph {}", filename);
     }
     let gbz: GBZ = serialize::load_from(filename).map_err(|x| x.to_string())?;
-    let gbz = Arc::new(gbz);
     if !gbz.has_metadata() {
         return Err("GFA decompression requires GBWT metadata".to_string());
     }
@@ -59,7 +58,6 @@ pub struct Config {
     pub output: Option<String>,
     pub threads: usize,
     pub buffer_size: usize,
-    pub path_order: bool,
     pub verbose: bool,
 }
 
@@ -76,7 +74,6 @@ impl Config {
         opts.optopt("b", "buffer-size", "output buffer size in megabytes (default 8)", "INT");
         opts.optflag("h", "help", "print this help");
         opts.optopt("o", "output", "write the GFA to a file instead of stdout", "FILE");
-        opts.optflag("p", "path-order", "write the paths in order (may be slower)");
         opts.optopt("t", "threads", "number of threads for extracting paths (default 1)", "INT");
         opts.optflag("v", "verbose", "print progress information");
         let matches = opts.parse(&args[1..]).map_err(|x| x.to_string())?;
@@ -86,7 +83,6 @@ impl Config {
             output: None,
             threads: Self::MIN_THREADS,
             buffer_size: Self::BUFFER_SIZE,
-            path_order: false,
             verbose: false,
         };
         if let Some(s) = matches.opt_str("b") {
@@ -109,9 +105,6 @@ impl Config {
         }
         if let Some(s) = matches.opt_str("o") {
             config.output = Some(s);
-        }
-        if matches.opt_present("p") {
-            config.path_order = true;
         }
         if let Some(s) = matches.opt_str("t") {
             match s.parse::<usize>() {
@@ -144,19 +137,18 @@ impl Config {
 
 //-----------------------------------------------------------------------------
 
-fn write_gfa(gbz: &Arc<GBZ>, config: &Config) -> io::Result<()> {
+fn write_gfa(gbz: &GBZ, config: &Config) -> io::Result<()> {
     if let Some(filename) = config.output.as_ref() {
         let mut options = OpenOptions::new();
         let file = options.create(true).write(true).truncate(true).open(filename)?;
         write_gfa_impl(gbz, file, config)?;
     } else {
-        let stdout = io::stdout();
-        write_gfa_impl(gbz, stdout.lock(), config)?;
+        write_gfa_impl(gbz, io::stdout(), config)?;
     }
     Ok(())
 }
 
-fn write_gfa_impl<T: Write>(gbz: &Arc<GBZ>, output: T, config: &Config) -> io::Result<()> {
+fn write_gfa_impl<T: Write + Send>(gbz: &GBZ, output: T, config: &Config) -> io::Result<()> {
     let mut buffer = BufWriter::with_capacity(config.buffer_size, output);
     buffer.write_all(b"H\tVN:Z:1.0\n")?;
     write_segments(gbz, &mut buffer, config)?;
@@ -281,7 +273,7 @@ enum LineType {
     WLine,
 }
 
-fn write_paths<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io::Result<()> {
+fn write_paths<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> io::Result<()> {
     let start = Instant::now();
     let metadata = gbz.metadata().unwrap();
     let ref_sample = metadata.sample_id(REF_SAMPLE);
@@ -291,11 +283,7 @@ fn write_paths<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io:
     }
     let ref_sample = ref_sample.unwrap();
     if config.verbose {
-        if config.path_order {
-            eprintln!("Writing paths in the original order");
-        } else {
-            eprintln!("Writing paths");
-        }
+        eprintln!("Writing paths");
     }
 
     // Determine the identifiers of reference paths and write them as P-lines.
@@ -313,16 +301,12 @@ fn write_paths<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io:
     Ok(())
 }
 
-fn write_walks<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io::Result<()> {
+fn write_walks<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> io::Result<()> {
     let start = Instant::now();
     let metadata = gbz.metadata().unwrap();
     let ref_sample = metadata.sample_id(REF_SAMPLE).unwrap_or(metadata.samples());
     if config.verbose {
-        if config.path_order {
-            eprintln!("Writing walks in the original order");
-        } else {
-            eprintln!("Writing walks");
-        }
+        eprintln!("Writing walks");
     }
 
     // Determine the identifiers of non-reference paths and write them as W-lines.
@@ -342,54 +326,23 @@ fn write_walks<T: Write>(gbz: &Arc<GBZ>, output: &mut T, config: &Config) -> io:
 
 //-----------------------------------------------------------------------------
 
-fn write_lines<T: Write>(gbz: &Arc<GBZ>, paths: &Vec<usize>, output: &mut T, config: &Config, line_type: LineType) -> io::Result<()> {
-    let mut thread_pool: ThreadPool<Vec<u8>> = ThreadPool::new(config.threads);
-
-    let mut next: usize = 0;
-    for &path_id in paths.iter() {
-        if config.path_order {
-            if let Some(result) = thread_pool.join(next) {
-                output.write_all(&result)?;
-            }
-        } else {
-            // Poll every 5 ms if we have a thread that can be joined.
-            next = thread_pool.len();
-            while next >= thread_pool.len() {
-                if let Some((thread_id, result)) = thread_pool.try_join() {
-                    next = thread_id;
-                    if let Some(result) = result {
-                        output.write_all(&result)?;
-                    }
-                } else {
-                    thread::sleep(Duration::from_millis(5));
-                }
-            }
+fn write_lines<T: Write + Send>(gbz: &GBZ, paths: &Vec<usize>, output: &mut T, _config: &Config, line_type: LineType) -> io::Result<()> {
+    let mutex = Mutex::new(output);
+    paths.par_iter().try_for_each(|path_id| {
+        let line = match line_type {
+            LineType::PLine => path_to_p_line(gbz, *path_id),
+            LineType::WLine => path_to_w_line(gbz, *path_id),
+        };
+        if let Ok(mut out) = mutex.lock() {
+            out.write_all(&line)?;
         }
-        let private_ref = Arc::clone(&gbz);
-        let signal = thread_pool.signal(next);
-        let handle = thread::spawn(move || {
-            path_to_line(&private_ref, path_id, &signal, line_type)
-        });
-        thread_pool.insert(handle, next);
-        next = (next + 1) % thread_pool.len();
-    }
-
-    for result in thread_pool.join_all(next) {
-        output.write_all(&result)?;
-    }
-    Ok(())
-}
-
-fn path_to_line(gbz: &Arc<GBZ>, path_id: usize, signal: &Arc<AtomicBool>, line_type: LineType) -> Vec<u8> {
-    match line_type {
-        LineType::PLine => path_to_p_line(gbz, path_id, signal),
-        LineType::WLine => path_to_w_line(gbz, path_id, signal),
-    }
+        Ok(())
+    })
 }
 
 //-----------------------------------------------------------------------------
 
-fn path_to_p_line(gbz: &Arc<GBZ>, path_id: usize, signal: &Arc<AtomicBool>) -> Vec<u8> {
+fn path_to_p_line(gbz: &GBZ, path_id: usize) -> Vec<u8> {
     let mut len = 0;
     let mut buffer: Vec<u8> = Vec::new();
 
@@ -439,13 +392,12 @@ fn path_to_p_line(gbz: &Arc<GBZ>, path_id: usize, signal: &Arc<AtomicBool>) -> V
         }
     }
     buffer.push(b'\n');
-    signal.store(true, Ordering::SeqCst);
     buffer
 }
 
 //-----------------------------------------------------------------------------
 
-fn path_to_w_line(gbz: &Arc<GBZ>, path_id: usize, signal: &Arc<AtomicBool>) -> Vec<u8> {
+fn path_to_w_line(gbz: &GBZ, path_id: usize) -> Vec<u8> {
     let mut buffer: Vec<u8> = Vec::new();
 
     let metadata = gbz.metadata().unwrap();
@@ -499,7 +451,6 @@ fn path_to_w_line(gbz: &Arc<GBZ>, path_id: usize, signal: &Arc<AtomicBool>) -> V
     }
 
     buffer.push(b'\n');
-    signal.store(true, Ordering::SeqCst);
     buffer
 }
 

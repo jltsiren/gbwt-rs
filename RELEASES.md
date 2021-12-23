@@ -3,6 +3,7 @@
 ## Current version
 
 * Support for empty paths.
+* `gbunzip` uses Rayon for multithreading.
 
 ## GBWT-rs 0.2.0 (2021-11-17)
 
