@@ -103,7 +103,7 @@ impl<T: Payload> Header<T> {
         for v in T::MIN_VERSION..T::VERSION + 1 {
             if self.version == v {
                 if (self.flags & T::mask(v)) == self.flags {
-                    return T::validate(&self);
+                    return T::validate(self);
                 } else {
                     return Err(format!("{}: Invalid flags {:X} for version {}", T::NAME, self.flags, self.version));
                 }

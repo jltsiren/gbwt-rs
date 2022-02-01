@@ -190,7 +190,7 @@ impl GBZ {
     /// See [`NodeIter`] for an example.
     pub fn node_iter(&self) -> NodeIter {
         NodeIter {
-            parent: &self,
+            parent: self,
             iter: self.real_nodes.one_iter()
         }
     }
@@ -213,9 +213,9 @@ impl GBZ {
         let next = if record.outdegree() > 0 && record.successor(0) == ENDMARKER { 1 } else { 0 };
         let limit = record.outdegree();
         Some(EdgeIter {
-            record: record,
-            next: next,
-            limit: limit,
+            record,
+            next,
+            limit,
             flip: false,
         })
     }
@@ -238,9 +238,9 @@ impl GBZ {
         let next = if record.outdegree() > 0 && record.successor(0) == ENDMARKER { 1 } else { 0 };
         let limit = record.outdegree();
         Some(EdgeIter {
-            record: record,
-            next: next,
-            limit: limit,
+            record,
+            next,
+            limit,
             flip: true,
         })
     }
@@ -303,7 +303,7 @@ impl GBZ {
         let iter = self.successors(node_id, orientation)?;
         Some(LinkIter {
             parent: self,
-            iter: iter,
+            iter,
         })
     }
 
@@ -328,7 +328,7 @@ impl GBZ {
         let iter = self.predecessors(node_id, orientation)?;
         Some(LinkIter {
             parent: self,
-            iter: iter,
+            iter,
         })
     }
 }
@@ -354,7 +354,7 @@ impl GBZ {
     pub fn path(&self, path_id: usize, orientation: Orientation) -> Option<PathIter> {
         let iter = self.index.sequence(support::encode_path(path_id, orientation))?;
         Some(PathIter {
-            iter: iter,
+            iter,
         })
     }
 
@@ -374,7 +374,7 @@ impl GBZ {
         let iter = self.index.sequence(support::encode_path(path_id, orientation))?;
         Some(SegmentPathIter {
             parent: self,
-            iter: iter,
+            iter,
             next: None,
             nodes: 0..0,
             fail: false,
@@ -413,7 +413,7 @@ impl GBZ {
         let (node_id, orientation) = support::decode_node(state.forward.node);
         let iter = self.successors(node_id, orientation)?;
         Some(StateIter {
-            iter: iter,
+            iter,
             state: state.clone(),
             flip: false,
         })
@@ -430,8 +430,8 @@ impl GBZ {
         let (node_id, orientation) = support::decode_node(state.forward.node);
         let iter = self.successors(node_id, orientation)?;
         Some(StateIter {
-            iter: iter,
-            state: state,
+            iter,
+            state,
             flip: true,
         })
     }
@@ -484,10 +484,10 @@ impl Serialize for GBZ {
         }
 
         Ok(GBZ {
-            header: header,
-            tags: tags,
-            index: index,
-            graph: graph,
+            header,
+            tags,
+            index,
+            graph,
             real_nodes: BitVector::from(real_nodes),
         })
     }
@@ -684,7 +684,7 @@ impl<'a> Iterator for SegmentIter<'a> {
     type Item = Segment<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(segment) = self.iter.next() {
+        for segment in self.iter.by_ref() {
             if self.parent.has_node(segment.nodes.start) {
                 return Some(segment);
             }
@@ -818,7 +818,7 @@ impl<'a> Iterator for PathIter<'a> {
     type Item = (usize, Orientation);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|gbwt_node| support::decode_node(gbwt_node))
+        self.iter.next().map(support::decode_node)
     }
 }
 
@@ -918,14 +918,12 @@ impl<'a> Iterator for SegmentPathIter<'a> {
                     return None;
                 }
                 self.advance();
+            } else if let Some(segment) = self.parent.node_to_segment(node_id) {
+                self.visit(segment.nodes.clone(), orientation);
+                return Some((segment, orientation));
             } else {
-                if let Some(segment) = self.parent.node_to_segment(node_id) {
-                    self.visit(segment.nodes.clone(), orientation);
-                    return Some((segment, orientation));
-                } else {
-                    self.fail = true;
-                    return None;
-                }
+                self.fail = true;
+                return None;
             }
         }
         None

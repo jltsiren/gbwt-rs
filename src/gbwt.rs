@@ -260,7 +260,7 @@ impl GBWT {
         }
         if let Some(record) = self.bwt.record(self.node_to_record(node)) {
             return Some(SearchState {
-                node: node,
+                node,
                 range: 0..record.len(),
             });
         }
@@ -284,8 +284,7 @@ impl GBWT {
         if let Some(record) = self.bwt.record(self.node_to_record(state.node)) {
             if let Some(range) = record.follow(state.range.clone(), node) {
                 return Some(SearchState {
-                    node: node,
-                    range: range,
+                    node, range,
                 })
             }
         }
@@ -306,7 +305,7 @@ impl GBWT {
             };
             return Some(BidirectionalState {
                 forward: state,
-                reverse: reverse,
+                reverse,
             });
         }
         None
@@ -332,7 +331,7 @@ impl GBWT {
             return None;
         }
         let record = self.bwt.record(self.node_to_record(state.forward.node))?;
-        Self::bd_internal(&record, &state, node)
+        Self::bd_internal(&record, state, node)
     }
 
     /// Extends the search by the given node backward and returns the new search state, or [`None`] if no such extensions exist.
@@ -360,8 +359,7 @@ impl GBWT {
     pub fn bd_internal(record: &Record, state: &BidirectionalState, node: usize) -> Option<BidirectionalState> {
         let (range, offset) = record.bd_follow(state.forward.range.clone(), node)?;
         let forward = SearchState {
-            node: node,
-            range: range,
+            node, range,
         };
         let pos = state.reverse.range.start + offset;
         let reverse = SearchState {
@@ -369,8 +367,7 @@ impl GBWT {
             range: pos..pos + forward.len(),
         };
         Some(BidirectionalState {
-            forward: forward,
-            reverse: reverse,
+            forward, reverse,
         })
     }
 }
@@ -421,11 +418,7 @@ impl Serialize for GBWT {
         }
 
         Ok(GBWT {
-            header: header,
-            tags: tags,
-            bwt: bwt,
-            endmarker: endmarker,
-            metadata: metadata,
+            header, tags, bwt, endmarker, metadata,
         })
     }
 
@@ -552,9 +545,9 @@ impl<'a> Iterator for SequenceIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(pos) = self.next {
             self.next = self.parent.forward(pos);
-            return Some(pos.node);
+            Some(pos.node)
         } else {
-            return None;
+            None
         }
     }
 }
@@ -766,10 +759,7 @@ impl Serialize for Metadata {
         }
 
         Ok(Metadata {
-            header: header,
-            path_names: path_names,
-            sample_names: sample_names,
-            contig_names: contig_names,
+            header, path_names, sample_names, contig_names,
         })
     }
 

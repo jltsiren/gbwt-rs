@@ -73,8 +73,7 @@ impl Pos {
     #[inline]
     pub fn new(node: usize, offset: usize) -> Self {
         Pos {
-            node: node,
-            offset: offset,
+            node, offset,
         }
     }
 }
@@ -162,8 +161,7 @@ impl Serialize for BWT {
             return Err(Error::new(ErrorKind::InvalidData, "BWT: Index / data length mismatch"));
         }
         Ok(BWT {
-            index: index,
-            data: data,
+            index, data,
         })
     }
 
@@ -290,7 +288,7 @@ impl<'a> Iterator for IdIter<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some((node, offset)) = self.iter.next() {
+        for (node, offset) in self.iter.by_ref() {
             self.next = node + 1;
             if self.parent.data[offset] != 0 {
                 return Some(node);
@@ -344,8 +342,8 @@ impl<'a> Record<'a> {
         }
 
         Some(Record {
-            id: id,
-            edges: edges,
+            id,
+            edges,
             bwt: &bytes[iter.offset()..],
         })
     }
@@ -391,6 +389,13 @@ impl<'a> Record<'a> {
             result += run.len;
         }
         result
+    }
+
+    /// Returns `false`.
+    ///
+    /// Keeps Clippy happy.
+    pub fn is_empty(&self) -> bool {
+        false
     }
 
     /// Decompress the record as a vector of successor positions.
@@ -442,9 +447,9 @@ impl<'a> Record<'a> {
         }
 
         // Flip the successor nodes to make them the predecessors of the other orientation of this node.
-        for rank in 0..edges.len() {
-            if edges[rank].node != ENDMARKER {
-                edges[rank].node = support::flip_node(edges[rank].node);
+        for edge in &mut edges {
+            if edge.node != ENDMARKER {
+                edge.node = support::flip_node(edge.node);
             }
         }
 
@@ -501,7 +506,7 @@ impl<'a> Record<'a> {
 
         // Find the occurrence of `pos.0` of rank `pos.1 - succ_rank`.
         let mut offset = 0;
-        for run in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
+        for run in RLEIter::with_sigma(self.bwt, self.outdegree()) {
             offset += run.len;
             if run.value != outrank {
                 continue;
@@ -536,7 +541,7 @@ impl<'a> Record<'a> {
 
         let mut result = self.offset(rank)..self.offset(rank);
         let mut offset = 0;
-        for run in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
+        for run in RLEIter::with_sigma(self.bwt, self.outdegree()) {
             if run.value == rank {
                 let run_range = offset..offset + run.len;
                 result.start += support::intersect(&run_range, &(0..range.start)).len();
@@ -577,7 +582,7 @@ impl<'a> Record<'a> {
         let mut result = self.offset(rank)..self.offset(rank);
         let mut count = 0;
         let mut offset = 0;
-        for run in RLEIter::with_sigma(&self.bwt, self.outdegree()) {
+        for run in RLEIter::with_sigma(self.bwt, self.outdegree()) {
             let run_range = offset..offset + run.len;
             if run.value == rank {
                 result.start += support::intersect(&run_range, &(0..range.start)).len();

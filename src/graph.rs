@@ -190,9 +190,9 @@ impl Graph {
         let sequence = self.sequences.range(start - 1..end - 1);
         Segment {
             id: segment_id,
-            name: name,
+            name,
             nodes: start..end,
-            sequence: sequence,
+            sequence,
         }
     }
 
@@ -271,9 +271,9 @@ impl Graph {
         let limit = (self.segments(), self.mapping.len());
         SegmentIter {
             parent: self,
-            iter: iter,
-            next: next,
-            limit: limit,
+            iter,
+            next,
+            limit,
         }
     }
 }
@@ -323,10 +323,7 @@ impl Serialize for Graph {
         }
 
         Ok(Graph {
-            header: header,
-            sequences: sequences,
-            segments: segments,
-            mapping: mapping,
+            header, sequences, segments, mapping,
         })
     }
 
@@ -361,10 +358,7 @@ impl<'a> Segment<'a> {
     /// Arguments corresponds to the fields with the same name.
     pub fn from_fields(id: usize, name: &'a [u8], nodes: Range<usize>, sequence: &'a [u8]) -> Self {
         Segment {
-            id: id,
-            name: name,
-            nodes: nodes,
-            sequence: sequence,
+            id, name, nodes, sequence,
         }
     }
 }

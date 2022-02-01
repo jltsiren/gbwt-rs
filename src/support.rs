@@ -58,8 +58,7 @@ impl Run {
     #[inline]
     pub fn new(value: usize, len: usize) -> Self {
         Run {
-            value: value,
-            len: len,
+            value, len,
         }
     }
 }
@@ -318,8 +317,7 @@ impl StringArray {
         index.push(0);
         let strings: Vec<u8> = Vec::with_capacity(total_len);
         StringArray {
-            index: index,
-            strings: strings,
+            index, strings,
         }
     }
 
@@ -344,10 +342,10 @@ impl StringArray {
         // Build the alphabet mappings.
         let mut packed_to_bytes: Vec<u8> = vec![0; sigma];
         let mut rank = 0;
-        for i in 0..bytes_to_packed.len() {
-            if bytes_to_packed[i] != 0 {
-                bytes_to_packed[i] = rank;
-                packed_to_bytes[rank] = i as u8;
+        for (index, value) in bytes_to_packed.iter_mut().enumerate() {
+            if *value != 0 {
+                *value = rank;
+                packed_to_bytes[rank] = index as u8;
                 rank += 1;
             }
         }
@@ -400,8 +398,7 @@ impl Serialize for StringArray {
             return Err(Error::new(ErrorKind::InvalidData, "StringArray: First string does not start at offset 0"));
         }
         Ok(StringArray {
-            index: index,
-            strings: strings,
+            index, strings,
         })
     }
 
@@ -592,8 +589,7 @@ impl Serialize for Dictionary {
         let strings = StringArray::load(reader)?;
         let sorted_ids = IntVector::load(reader)?;
         Ok(Dictionary {
-            strings: strings,
-            sorted_ids: sorted_ids,
+            strings, sorted_ids,
         })
     }
 
@@ -625,7 +621,7 @@ impl TryFrom<StringArray> for Dictionary {
 
         Ok(Dictionary {
             strings: source,
-            sorted_ids: sorted_ids,
+            sorted_ids,
         })
     }
 }
@@ -877,7 +873,7 @@ impl<'a> ByteCodeIter<'a> {
     /// Returns an iterator over the byte slice.
     pub fn new(bytes: &'a [u8]) -> Self {
         ByteCodeIter {
-            bytes: bytes,
+            bytes,
             offset: 0,
         }
     }
@@ -964,8 +960,8 @@ impl RLE {
         let (sigma, threshold) = Self::sanitize(sigma);
         RLE {
             bytes: ByteCode::new(),
-            sigma: sigma,
-            threshold: threshold,
+            sigma,
+            threshold,
         }
     }
 
@@ -985,6 +981,8 @@ impl RLE {
     }
 
     /// Encodes and stores a run.
+    ///
+    /// # Safety
     ///
     /// Behavior is undefined if `run.len == 0` or `run.value >= self.sigma()`.
     pub unsafe fn write_unchecked(&mut self, run: Run) {
@@ -1053,8 +1051,8 @@ impl Default for RLE {
         let (sigma, threshold) = Self::sanitize(0);
         RLE {
             bytes: ByteCode::new(),
-            sigma: sigma,
-            threshold: threshold,
+            sigma,
+            threshold,
         }
     }
 }
@@ -1107,8 +1105,8 @@ impl<'a> RLEIter<'a> {
         let (sigma, threshold) = RLE::sanitize(0);
         RLEIter {
             source: ByteCodeIter::new(bytes),
-            sigma: sigma,
-            threshold: threshold,
+            sigma,
+            threshold,
         }
     }
 
@@ -1122,8 +1120,8 @@ impl<'a> RLEIter<'a> {
         let (sigma, threshold) = RLE::sanitize(sigma);
         RLEIter {
             source: ByteCodeIter::new(bytes),
-            sigma: sigma,
-            threshold: threshold,
+            sigma,
+            threshold,
         }
     }
 
@@ -1176,7 +1174,7 @@ impl<'a> Iterator for RLEIter<'a> {
                 if let Some(len) = self.source.next() { run.len += len; } else { return None; }
             }
         }
-        return Some(run);
+        Some(run)
     }
 }
 
