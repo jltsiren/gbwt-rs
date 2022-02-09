@@ -40,10 +40,14 @@ fn main() -> Result<(), String> {
         eprintln!("");
     }
 
-    write_gfa(&gbz, &config).map_err(|x| x.to_string())?;
+    if !config.benchmark {
+        write_gfa(&gbz, &config).map_err(|x| x.to_string())?;
+        if config.verbose {
+            eprintln!("");
+        }
+    }
 
     if config.verbose {
-        eprintln!("");
         eprintln!("GFA decompressed in {:.3} seconds", start.elapsed().as_secs_f64());
         internal::report_memory_usage();
         eprintln!("");
@@ -58,6 +62,7 @@ pub struct Config {
     pub output: Option<String>,
     pub threads: usize,
     pub buffer_size: usize,
+    pub benchmark: bool,
     pub verbose: bool,
 }
 
@@ -73,6 +78,7 @@ impl Config {
         let mut opts = Options::new();
         opts.optopt("b", "buffer-size", "output buffer size in megabytes (default 8)", "INT");
         opts.optflag("h", "help", "print this help");
+        opts.optflag("l", "load-gbz", "load the GBZ for benchmarking");
         opts.optopt("o", "output", "write the GFA to a file instead of stdout", "FILE");
         opts.optopt("t", "threads", "number of threads for extracting paths (default 1)", "INT");
         opts.optflag("v", "verbose", "print progress information");
@@ -83,6 +89,7 @@ impl Config {
             output: None,
             threads: Self::MIN_THREADS,
             buffer_size: Self::BUFFER_SIZE,
+            benchmark: false,
             verbose: false,
         };
         if let Some(s) = matches.opt_str("b") {
@@ -102,6 +109,9 @@ impl Config {
             let header = format!("Usage: {} [options] graph.gbz > graph.gfa", program);
             eprint!("{}", opts.usage(&header));
             process::exit(0);
+        }
+        if matches.opt_present("l") {
+            config.benchmark = true;
         }
         if let Some(s) = matches.opt_str("o") {
             config.output = Some(s);
