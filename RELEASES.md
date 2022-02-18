@@ -1,6 +1,8 @@
 # GBWT-rs releases
 
-## Current version
+## GBWT-rs 0.2.1 (2022-02-17)
+
+Minor patch release for the GBZ paper.
 
 * Support for empty paths.
 * `gbunzip` uses Rayon for multithreading.
