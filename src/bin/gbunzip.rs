@@ -68,7 +68,7 @@ pub struct Config {
 
 impl Config {
     const MIN_THREADS: usize = 1;
-    const MAX_THREADS: usize = 31;
+    const MAX_THREADS: usize = 64;
     const BUFFER_SIZE: usize = 8 * 1048576;
 
     pub fn new() -> Result<Config, String> {

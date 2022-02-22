@@ -1,5 +1,11 @@
 # GBWT-rs releases
 
+## GBWT-rs 0.2.2 (2022-02-22)
+
+Another patch release for the GBZ paper.
+
+* Increase the maximum number of decompression threads in `gbunzip` from 31 to 64.
+
 ## GBWT-rs 0.2.1 (2022-02-17)
 
 Minor patch release for the GBZ paper.
