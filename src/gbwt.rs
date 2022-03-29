@@ -580,6 +580,7 @@ impl<'a> FusedIterator for SequenceIter<'a> {}
 ///
 /// assert!(metadata.has_path_names());
 /// assert_eq!(metadata.paths(), 6);
+/// assert_eq!(metadata.pan_sn_path(3), Some("sample#2#A".to_string()));
 /// let path = metadata.path(3).unwrap();
 ///
 /// assert!(metadata.has_sample_names());
@@ -632,6 +633,16 @@ impl Metadata {
         }
     }
 
+    /// Returns the name of the path with the given identifier in the [PanSN format](https://github.com/pangenome/PanSN-spec), or [`None`] if there is no such name.
+    ///
+    /// Valid identifiers are in the interval `0..self.paths()`.
+    /// `'#'` will be used as the separator character.
+    pub fn pan_sn_path(&self, id: usize) -> Option<String> {
+        let path_name = self.path(id)?;
+        let result = format!("{}#{}#{}", self.sample_name(path_name.sample()), path_name.phase(), self.contig_name(path_name.contig()));
+        Some(result)
+    }
+
     /// Returns an iterator over path names.
     pub fn path_iter(&self) -> slice::Iter<PathName> {
         self.path_names.iter()
@@ -657,7 +668,7 @@ impl Metadata {
         self.header.payload().haplotype_count
     }
 
-    /// Returns the name of the sample with the given identifier, or [`None`] if there is no such name.
+    /// Returns the name of the sample with the given identifier, or [`None`] if there is no such sample or name.
     ///
     /// Valid identifiers are in the interval `0..self.samples()`.
     /// Also returns [`None`] if the name exists but is not valid UTF-8.
@@ -669,6 +680,17 @@ impl Metadata {
         }
     }
 
+    /// Returns the name of the sample with the given identifier.
+    ///
+    /// Returns a string representation of the the sample identifier when [`Metadata::sample`] would return [`None`].
+    pub fn sample_name(&self, id: usize) -> String {
+        if let Some(name) = self.sample(id) {
+            name.to_string()
+        } else {
+            id.to_string()
+        }
+    }
+ 
     /// Returns the sample idenfier corresponding to the given sample name, or [`None`] if there is no such sample.
     pub fn sample_id(&self, name: &str) -> Option<usize> {
         self.sample_names.id(name)
@@ -694,7 +716,7 @@ impl Metadata {
         self.header.payload().contig_count
     }
 
-    /// Returns the name of the contig with the given identifier, or [`None`] if there is no such name.
+    /// Returns the name of the contig with the given identifier, or [`None`] if there is no such contig or name.
     ///
     /// Valid identifiers are in the interval `0..self.contigs()`.
     /// Also returns [`None`] if the name exists but is not valid UTF-8.
@@ -703,6 +725,17 @@ impl Metadata {
             self.contig_names.str(id).ok()
         } else {
             None
+        }
+    }
+
+    /// Returns the name of the contig with the given identifier.
+    ///
+    /// Returns a string representation of the the contig identifier when [`Metadata::contig`] would return [`None`].
+    pub fn contig_name(&self, id: usize) -> String {
+        if let Some(name) = self.contig(id) {
+            name.to_string()
+        } else {
+            id.to_string()
         }
     }
 
