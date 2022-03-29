@@ -532,7 +532,9 @@ fn test_metadata(paths: bool, samples: bool, contigs: bool, name: &str) {
             for contig in 0..CONTIGS {
                 for phase in 0..PHASES {
                     let path = PathName::from_fields(sample, contig, phase, 0);
+                    let pan_sn = format!("{}#{}#{}", metadata.sample_name(sample), phase, metadata.contig_name(contig));
                     assert_eq!(metadata.path(index), Some(path), "{}: Invalid path name {}", name, index);
+                    assert_eq!(metadata.pan_sn_path(index), Some(pan_sn), "{}: Invalid PanSN path name {}", name, index);
                     assert_eq!(iter.next(), Some(&path), "{}: Invalid path name {} from iterator", name, index);
                     index += 1;
                 }
@@ -548,11 +550,17 @@ fn test_metadata(paths: bool, samples: bool, contigs: bool, name: &str) {
         for sample in 0..SAMPLES {
             let sample_name = format!("sample_{}", sample);
             assert_eq!(metadata.sample(sample), Some(sample_name.as_str()), "{}: Invalid sample name {}", name, sample);
+            assert_eq!(metadata.sample_name(sample), sample_name, "{}: Invalid forced sample name {}", name, sample);
             assert_eq!(iter.next(), Some(sample_name.as_bytes()), "{}: Invalid sample name {} from iterator", name, sample);
             assert_eq!(metadata.sample_id(&sample_name), Some(sample), "{}: Invalid id for sample {}", name, sample_name);
         }
         assert_eq!(metadata.sample(SAMPLES), None, "{}: Got a sample name past the end", name);
         assert_eq!(iter.next(), None, "{}: Got a sample name past the end from iterator", name);
+    } else {
+        for sample in 0..SAMPLES {
+            let sample_name = sample.to_string();
+            assert_eq!(metadata.sample_name(sample), sample_name, "{}: Invalid forced sample name {}", name, sample);
+        }
     }
     assert!(metadata.sample_id("invalid").is_none(), "{}: Got an id for an invalid sample", name);
 
@@ -562,11 +570,17 @@ fn test_metadata(paths: bool, samples: bool, contigs: bool, name: &str) {
         for contig in 0..CONTIGS {
             let contig_name = format!("contig_{}", contig);
             assert_eq!(metadata.contig(contig), Some(contig_name.as_str()), "{}: Invalid contig name {}", name, contig);
+            assert_eq!(metadata.contig_name(contig), contig_name, "{}: Invalid forced contig name {}", name, contig);
             assert_eq!(iter.next(), Some(contig_name.as_bytes()), "{}: Invalid contig name {} from iterator", name, contig);
             assert_eq!(metadata.contig_id(&contig_name), Some(contig), "{}: Invalid id for contig {}", name, contig_name);
         }
         assert_eq!(metadata.contig(CONTIGS), None, "{}: Got a contig name past the end", name);
         assert_eq!(iter.next(), None, "{}: Got a contig name past the end from iterator", name);
+    } else {
+        for contig in 0..CONTIGS {
+            let contig_name = contig.to_string();
+            assert_eq!(metadata.contig_name(contig), contig_name, "{}: Invalid forced contig name {}", name, contig);
+        }
     }
     assert!(metadata.contig_id("invalid").is_none(), "{}: Got an id for an invalid contig", name);
 
