@@ -189,7 +189,7 @@ fn write_gfa(gbz: &GBZ, config: &Config) -> io::Result<()> {
 
 fn write_gfa_impl<T: Write + Send>(gbz: &GBZ, output: T, config: &Config) -> io::Result<()> {
     let mut buffer = BufWriter::with_capacity(config.buffer_size, output);
-    buffer.write_all(b"H\tVN:Z:1.0\n")?;
+    buffer.write_all(b"H\tVN:Z:1.1\n")?;
     write_segments(gbz, &mut buffer, config)?;
     write_links(gbz, &mut buffer, config)?;
 
