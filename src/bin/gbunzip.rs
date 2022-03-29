@@ -30,8 +30,8 @@ fn main() -> Result<(), String> {
         return Err("GFA decompression requires GBWT metadata".to_string());
     }
     if let Some(metadata) = gbz.metadata() {
-        if !metadata.has_sample_names() || !metadata.has_contig_names() || !metadata.has_path_names() {
-            return Err("GFA decompression requires sample / contig / path names".to_string());
+        if !metadata.has_path_names() {
+            return Err("GFA decompression requires path names".to_string());
         }
     }
     if config.verbose {
@@ -57,13 +57,34 @@ fn main() -> Result<(), String> {
 
 //-----------------------------------------------------------------------------
 
-pub struct Config {
-    pub filename: Option<String>,
-    pub output: Option<String>,
-    pub threads: usize,
-    pub buffer_size: usize,
-    pub benchmark: bool,
-    pub verbose: bool,
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+enum PathMode {
+    Default,
+    PanSN,
+    RefOnly,
+}
+
+impl PathMode {
+    fn new(mode: &str) -> Option<Self> {
+        match mode {
+            "default" => Some(PathMode::Default),
+            "pan-sn" => Some(PathMode::PanSN),
+            "ref-only" => Some(PathMode::RefOnly),
+            _ => None,
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+struct Config {
+    filename: Option<String>,
+    output: Option<String>,
+    threads: usize,
+    buffer_size: usize,
+    path_mode: PathMode,
+    benchmark: bool,
+    verbose: bool,
 }
 
 impl Config {
@@ -80,6 +101,7 @@ impl Config {
         opts.optflag("h", "help", "print this help");
         opts.optflag("l", "load-gbz", "load the GBZ for benchmarking");
         opts.optopt("o", "output", "write the GFA to a file instead of stdout", "FILE");
+        opts.optopt("p", "paths", "write paths in MODE (default, pan-sn, ref-only)", "MODE");
         opts.optopt("t", "threads", "number of threads for extracting paths (default 1)", "INT");
         opts.optflag("v", "verbose", "print progress information");
         let matches = opts.parse(&args[1..]).map_err(|x| x.to_string())?;
@@ -89,6 +111,7 @@ impl Config {
             output: None,
             threads: Self::MIN_THREADS,
             buffer_size: Self::BUFFER_SIZE,
+            path_mode: PathMode::Default,
             benchmark: false,
             verbose: false,
         };
@@ -115,6 +138,12 @@ impl Config {
         }
         if let Some(s) = matches.opt_str("o") {
             config.output = Some(s);
+        }
+        if let Some(s) = matches.opt_str("p") {
+            match PathMode::new(&s) {
+                Some(mode) => config.path_mode = mode,
+                None => return Err(format!("--paths: invalid path mode {}", s)),
+            }
         }
         if let Some(s) = matches.opt_str("t") {
             match s.parse::<usize>() {
@@ -163,8 +192,20 @@ fn write_gfa_impl<T: Write + Send>(gbz: &GBZ, output: T, config: &Config) -> io:
     buffer.write_all(b"H\tVN:Z:1.0\n")?;
     write_segments(gbz, &mut buffer, config)?;
     write_links(gbz, &mut buffer, config)?;
-    write_paths(gbz, &mut buffer, config)?;
-    write_walks(gbz, &mut buffer, config)?;
+
+    match config.path_mode {
+        PathMode::Default => {
+            write_paths(gbz, &mut buffer, config)?;
+            write_walks(gbz, &mut buffer, config)?;
+        },
+        PathMode::PanSN => {
+            write_pan_sn(gbz, &mut buffer, config)?;
+        },
+        PathMode::RefOnly => {
+            write_paths(gbz, &mut buffer, config)?;
+        },
+    }
+
     buffer.flush()?;
     Ok(())
 }
@@ -280,6 +321,7 @@ fn write_link<T: Write>(from: (&[u8], Orientation), to: (&[u8], Orientation), ou
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 enum LineType {
     PLine,
+    PanSN,
     WLine,
 }
 
@@ -307,6 +349,26 @@ fn write_paths<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> i
 
     if config.verbose {
         eprintln!("Wrote {} paths in {:.3} seconds", paths.len(), start.elapsed().as_secs_f64());
+    }
+    Ok(())
+}
+
+fn write_pan_sn<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> io::Result<()> {
+    let start = Instant::now();
+    let metadata = gbz.metadata().unwrap();
+    if config.verbose {
+        eprintln!("Writing PanSN paths");
+    }
+
+    // Write all paths as P-lines with PanSN names.
+    let mut paths: Vec<usize> = Vec::new();
+    for path_id in 0..metadata.paths() {
+        paths.push(path_id);
+    }
+    write_lines(gbz, &paths, output, config, LineType::PanSN)?;
+
+    if config.verbose {
+        eprintln!("Wrote {} PanSN paths in {:.3} seconds", paths.len(), start.elapsed().as_secs_f64());
     }
     Ok(())
 }
@@ -341,6 +403,7 @@ fn write_lines<T: Write + Send>(gbz: &GBZ, paths: &Vec<usize>, output: &mut T, _
     paths.par_iter().try_for_each(|path_id| {
         let line = match line_type {
             LineType::PLine => path_to_p_line(gbz, *path_id),
+            LineType::PanSN => path_to_pan_sn(gbz, *path_id),
             LineType::WLine => path_to_w_line(gbz, *path_id),
         };
         if let Ok(mut out) = mutex.lock() {
@@ -352,18 +415,15 @@ fn write_lines<T: Write + Send>(gbz: &GBZ, paths: &Vec<usize>, output: &mut T, _
 
 //-----------------------------------------------------------------------------
 
-fn path_to_p_line(gbz: &GBZ, path_id: usize) -> Vec<u8> {
-    let mut len = 0;
+fn write_p_line(gbz: &GBZ, path_id: usize, name: &str) -> Vec<u8> {
     let mut buffer: Vec<u8> = Vec::new();
 
     buffer.push(b'P');
     buffer.push(b'\t');
-    let metadata = gbz.metadata().unwrap();
-    let path_name = metadata.path(path_id).unwrap();
-    let contig_name = metadata.contig(path_name.contig()).unwrap();
-    buffer.extend_from_slice(contig_name.as_bytes());
+    buffer.extend_from_slice(name.as_bytes());
     buffer.push(b'\t');
 
+    let mut len = 0;
     match gbz.segment_path(path_id, Orientation::Forward) {
         Some(iter) => {
             for (segment, orientation) in iter {
@@ -393,16 +453,21 @@ fn path_to_p_line(gbz: &GBZ, path_id: usize) -> Vec<u8> {
         },
     }
 
-    buffer.push(b'\t');
-    if len > 1 {
-        buffer.push(b'*');
-        for _ in 2..len {
-            buffer.push(b',');
-            buffer.push(b'*');
-        }
-    }
-    buffer.push(b'\n');
+    buffer.extend_from_slice(b"\t*\n");
     buffer
+}
+
+fn path_to_p_line(gbz: &GBZ, path_id: usize) -> Vec<u8> {
+    let metadata = gbz.metadata().unwrap();
+    let path_name = metadata.path(path_id).unwrap();
+    let contig_name = metadata.contig(path_name.contig()).unwrap();
+    write_p_line(gbz, path_id, &contig_name)
+}
+
+fn path_to_pan_sn(gbz: &GBZ, path_id: usize) -> Vec<u8> {
+    let metadata = gbz.metadata().unwrap();
+    let path_name = metadata.pan_sn_path(path_id).unwrap();
+    write_p_line(gbz, path_id, &path_name)
 }
 
 //-----------------------------------------------------------------------------
@@ -414,11 +479,11 @@ fn path_to_w_line(gbz: &GBZ, path_id: usize) -> Vec<u8> {
     let path_name = metadata.path(path_id).unwrap();
     buffer.push(b'W');
     buffer.push(b'\t');
-    buffer.extend_from_slice(metadata.sample(path_name.sample()).unwrap().as_bytes());
+    buffer.extend_from_slice(metadata.sample_name(path_name.sample()).as_bytes());
     buffer.push(b'\t');
     buffer.extend_from_slice(path_name.phase().to_string().as_bytes());
     buffer.push(b'\t');
-    buffer.extend_from_slice(metadata.contig(path_name.contig()).unwrap().as_bytes());
+    buffer.extend_from_slice(metadata.contig_name(path_name.contig()).as_bytes());
     buffer.push(b'\t');
     buffer.extend_from_slice(path_name.fragment().to_string().as_bytes());
     buffer.push(b'\t');
