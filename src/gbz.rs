@@ -36,7 +36,7 @@ mod tests;
 /// It represents the subgraph of the original graph induced by the paths in the GBWT index.
 /// `GBZ` methods used node identifiers in the original graph.
 /// Functions [`support::encode_node`], [`support::node_id`], [`support::node_orientation`], [`support::decode_node`], and [`support::flip_node`] enable conversions between original and GBWT node ids.
-/// While the methods in [`Graph`] may panic or return unpredictable results when the correspondin object does not exist, `GBZ` methods return [`None`] in such cases.
+/// While the methods in [`Graph`] may panic or return unpredictable results when the corresponding object does not exist, `GBZ` methods return [`None`] in such cases.
 ///
 /// In addition to representing a bidirected sequence graph with integer node ids, a `GBZ` also contains an optional node-to-segment translation.
 /// The translation enables representing a GFA graph, where each segment has a string name and corresponds to the concatenation of a range of nodes.

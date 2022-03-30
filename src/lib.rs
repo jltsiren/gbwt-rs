@@ -55,7 +55,7 @@ pub const SOURCE_KEY: &str = "source";
 /// Value of the source tag.
 pub const SOURCE_VALUE: &str = "jltsiren/gbwt-rs";
 
-/// Sample name for reference paths.
+/// Sample name for named / reference paths.
 pub const REF_SAMPLE: &str = "_gbwt_ref";
 
 //-----------------------------------------------------------------------------

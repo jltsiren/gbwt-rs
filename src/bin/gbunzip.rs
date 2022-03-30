@@ -330,7 +330,7 @@ fn write_paths<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> i
     let metadata = gbz.metadata().unwrap();
     let ref_sample = metadata.sample_id(REF_SAMPLE);
     if ref_sample.is_none() {
-        eprintln!("No reference paths in the graph");
+        eprintln!("No named paths in the graph");
         return Ok(());
     }
     let ref_sample = ref_sample.unwrap();
@@ -338,7 +338,7 @@ fn write_paths<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> i
         eprintln!("Writing paths");
     }
 
-    // Determine the identifiers of reference paths and write them as P-lines.
+    // Determine the identifiers of named paths and write them as P-lines.
     let mut paths: Vec<usize> = Vec::new();
     for (path_id, path_name) in metadata.path_iter().enumerate() {
         if path_name.sample() == ref_sample {
@@ -381,7 +381,7 @@ fn write_walks<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> i
         eprintln!("Writing walks");
     }
 
-    // Determine the identifiers of non-reference paths and write them as W-lines.
+    // Determine the identifiers of haplotype paths and write them as W-lines.
     let mut paths: Vec<usize> = Vec::new();
     for (path_id, path_name) in metadata.path_iter().enumerate() {
         if path_name.sample() != ref_sample {

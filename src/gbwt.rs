@@ -812,7 +812,7 @@ impl Serialize for Metadata {
 /// * Contigs correspond to contig identifiers in the metadata.
 /// * Each (sample, phase) combination corresponds to a haplotype in the metadata.
 /// * Fragment field can be used as a fragment index for fragments from the sequence identified by (sample, contig, phase).
-///   It can also be used as the starting offset of the fragment in the corresponding reference sequence.
+///   It can also be used as the starting offset of the fragment in the corresponding sequence.
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq)]
 pub struct PathName {
