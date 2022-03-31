@@ -362,8 +362,13 @@ fn write_pan_sn<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> 
 
     // Write all paths as P-lines with PanSN names.
     let mut paths: Vec<usize> = Vec::new();
-    for path_id in 0..metadata.paths() {
+    let mut warned = false;
+    for (path_id, path_name) in metadata.path_iter().enumerate() {
         paths.push(path_id);
+        if !warned && path_name.fragment() > 0 {
+            eprintln!("Warning: Fragment field is in use; there may be duplicate path names");
+            warned = true;
+        }
     }
     write_lines(gbz, &paths, output, config, LineType::PanSN)?;
 
