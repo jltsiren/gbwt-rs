@@ -3,7 +3,8 @@
 //! The GBWT was originally described in:
 //!
 //! > Sirén, Garrison, Novak, Paten, Durbin: **Haplotype-aware graph indexes**.  
-//! > Bioinformatics, 2020. DOI: [10.1093/bioinformatics/btz575](https://doi.org/10.1093/bioinformatics/btz575)
+//! > Bioinformatics, 2020.
+//! > DOI: [10.1093/bioinformatics/btz575](https://doi.org/10.1093/bioinformatics/btz575)
 //!
 //! At the moment, this implementation only supports GBWT indexes built with other tools.
 //! See also the original [C++ implementation](https://github.com/jltsiren/gbwt).

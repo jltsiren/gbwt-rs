@@ -18,6 +18,12 @@
 //! Science 374(6574):abg8871, 2021.
 //! DOI: [10.1126/science.abg8871](https://doi.org/10.1126/science.abg8871)
 //!
+//! ### GBZ
+//!
+//! Jouni Sirén and Benedict Paten: **GBZ File Format for Pangenome Graphs**.\
+//! Accepted to Bioinformatics, 2022.
+//! DOI: [10.1093/bioinformatics/btac656](https://doi.org/10.1093/bioinformatics/btac656)
+//!
 //! # Notes
 //!
 //! * See [Simple-SDS](https://github.com/jltsiren/simple-sds) for assumptions on the environment.

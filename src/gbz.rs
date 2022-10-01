@@ -4,6 +4,12 @@
 //! It is a space-efficient file format for storing a pangenome graph based on aligned haplotype sequences, with the haplotypes stored as paths.
 //! The format is compatible with a subset of [GFA1](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md).
 //!
+//! GBZ file format has been described in:
+//!
+//! > Jouni Sirén and Benedict Paten: **GBZ File Format for Pangenome Graphs**.  
+//! > Accepted to Bioinformatics, 2022.
+//! > DOI: [10.1093/bioinformatics/btac656](https://doi.org/10.1093/bioinformatics/btac656)
+//!
 //! See also the [C++ implementation](https://github.com/jltsiren/gbwtgraph) and the [file format specification](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
 
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
