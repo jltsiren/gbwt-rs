@@ -20,7 +20,7 @@
 //!
 //! ### GBZ
 //!
-//! Jouni Sirén and Benedict Paten: **GBZ File Format for Pangenome Graphs**.\
+//! Jouni Sirén and Benedict Paten: **GBZ file format for pangenome graphs**.\
 //! Bioinformatics 38(22):5012-5018, 2022.
 //! DOI: [10.1093/bioinformatics/btac656](https://doi.org/10.1093/bioinformatics/btac656)
 //!
