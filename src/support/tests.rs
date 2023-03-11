@@ -3,6 +3,7 @@ use super::*;
 use simple_sds::serialize;
 
 use rand::Rng;
+use rand::seq::SliceRandom;
 use rand::rngs::ThreadRng;
 
 //-----------------------------------------------------------------------------
@@ -418,6 +419,132 @@ fn gbwt_record() {
         assert_eq!(decoded[i], runs[i], "Invalid run {}", i);
     }
     assert_eq!(iter.offset(), encoder.len(), "Iterator did not consume all bytes");
+}
+
+//-----------------------------------------------------------------------------
+
+#[test]
+fn empty_disjoint_sets() {
+    let mut sets = DisjointSets::new(0, 0);
+    assert_eq!(sets.len(), 0, "Empty structure has non-zero length");
+    assert!(sets.is_empty(), "Empty structure is not empty");
+    assert_eq!(sets.offset(), 0, "Empty structure has non-zero offset");
+
+    let sets = sets.extract(|_| true);
+    assert!(sets.is_empty(), "Empty structure contains sets");
+}
+
+fn random_sets(len: usize, offset: usize, num_sets: usize, rng: &mut ThreadRng) -> Vec<Vec<usize>> {
+    let mut values: Vec<usize> = (offset..len + offset).collect();
+    values.shuffle(rng);
+
+    let mut result: Vec<Vec<usize>> = Vec::new();
+    for &value in values[0..num_sets].iter() {
+        result.push(vec![value]);
+    }
+    for &value in values[num_sets..len].iter() {
+        let set = rng.gen::<usize>() % num_sets;
+        result[set].push(value);
+    }
+
+    result
+}
+
+fn join_sets(sets: &mut DisjointSets, source: &Vec<Vec<usize>>, rng: &mut ThreadRng) {
+    for set in source.iter() {
+        for right in 1..set.len() {
+            let left = rng.gen::<usize>() % right;
+            sets.union(set[left], set[right]);
+        }
+    }
+}
+
+fn filter_sets<F: Fn(usize) -> bool>(source: Vec<Vec<usize>>, include_value: F) -> Vec<Vec<usize>> {
+    let mut result: Vec<Vec<usize>> = Vec::new();
+    for set in source.iter() {
+        let filtered: Vec<usize> = set.iter().filter(|value| include_value(**value)).copied().collect();
+        if !filtered.is_empty() {
+            result.push(filtered);
+        }
+    }
+    result
+}
+
+fn sort_sets(sets: &mut Vec<Vec<usize>>) {
+    for set in sets.iter_mut() {
+        set.sort();
+    }
+    sets.sort();
+}
+
+#[test]
+fn zero_offset_disjoint_sets() {
+    let len = 38;
+    let offset = 0;
+    let num_sets = 5;
+
+    let mut sets = DisjointSets::new(len, offset);
+    assert_eq!(sets.len(), len, "Invalid length");
+    assert_eq!(sets.is_empty(), len == 0, "Invalid emptiness");
+    assert_eq!(sets.offset(), offset, "Invalid offset");
+
+    let mut rng = rand::thread_rng();
+    let mut source = random_sets(len, offset, num_sets, &mut rng);
+    join_sets(&mut sets, &source, &mut rng);
+    sort_sets(&mut source);
+
+    let extracted = sets.extract(|_| true);
+    assert_eq!(extracted.len(), num_sets, "Invalid number of sets");
+    for i in 0..num_sets {
+        assert_eq!(extracted[i], source[i], "Invalid set {}", i);
+    }
+}
+
+#[test]
+fn non_zero_offset_disjoint_sets() {
+    let len = 41;
+    let offset = 22;
+    let num_sets = 6;
+
+    let mut sets = DisjointSets::new(len, offset);
+    assert_eq!(sets.len(), len, "Invalid length");
+    assert_eq!(sets.is_empty(), len == 0, "Invalid emptiness");
+    assert_eq!(sets.offset(), offset, "Invalid offset");
+
+    let mut rng = rand::thread_rng();
+    let mut source = random_sets(len, offset, num_sets, &mut rng);
+    join_sets(&mut sets, &source, &mut rng);
+    sort_sets(&mut source);
+
+    let extracted = sets.extract(|_| true);
+    assert_eq!(extracted.len(), num_sets, "Invalid number of sets");
+    for i in 0..num_sets {
+        assert_eq!(extracted[i], source[i], "Invalid set {}", i);
+    }
+}
+
+#[test]
+fn filtered_disjoint_sets() {
+    let len = 52;
+    let offset = 21;
+    let num_sets = 7;
+
+    let mut sets = DisjointSets::new(len, offset);
+    assert_eq!(sets.len(), len, "Invalid length");
+    assert_eq!(sets.is_empty(), len == 0, "Invalid emptiness");
+    assert_eq!(sets.offset(), offset, "Invalid offset");
+
+    let mut rng = rand::thread_rng();
+    let source = random_sets(len, offset, num_sets, &mut rng);
+    join_sets(&mut sets, &source, &mut rng);
+    let mut source = filter_sets(source, |value| value % 3 != 0);
+    sort_sets(&mut source);
+
+    let extracted = sets.extract(|value| value % 3 != 0);
+    assert_eq!(extracted.len(), num_sets, "Invalid number of sets");
+    for i in 0..num_sets {
+        assert_eq!(extracted[i], source[i], "Invalid set {}", i);
+    }
 }
 
 //-----------------------------------------------------------------------------

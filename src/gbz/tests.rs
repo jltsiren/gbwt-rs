@@ -458,3 +458,22 @@ fn segment_paths() {
 }
 
 //-----------------------------------------------------------------------------
+
+#[test]
+fn weakly_connected_components() {
+    let filename = support::get_test_data("example.gbz");
+    let gbz: GBZ = serialize::load_from(&filename).unwrap();
+
+    let truth: Vec<Vec<usize>> = vec![
+        vec![11, 12, 13, 14, 15, 16, 17],
+        vec![21, 22, 23, 24, 25],
+    ];
+
+    let components = gbz.weakly_connected_components();
+    assert_eq!(components.len(), truth.len(), "Invalid number of components");
+    for i in 0..components.len() {
+        assert_eq!(components[i], truth[i], "Invalid component {}", i);
+    }
+}
+
+//-----------------------------------------------------------------------------

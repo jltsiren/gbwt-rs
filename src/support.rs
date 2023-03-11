@@ -7,7 +7,7 @@ use simple_sds::sparse_vector::SparseVector;
 use simple_sds::bits;
 
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::collections::btree_map::Iter as TagIter;
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
@@ -15,7 +15,7 @@ use std::iter::FusedIterator;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::str::Utf8Error;
-use std::{cmp, io};
+use std::{cmp, io, mem};
 
 #[cfg(test)]
 mod tests;
@@ -1179,5 +1179,147 @@ impl<'a> Iterator for RLEIter<'a> {
 }
 
 impl<'a> FusedIterator for RLEIter<'a> {}
+
+//-----------------------------------------------------------------------------
+
+/// A quick and dirty disjoint sets implementation.
+///
+/// Uses path splitting and union by rank.
+/// The implementation is for all values in range `offset..offset + len`.
+/// Each value is initially in a separate set.
+/// The root element of the set containing a value can be retrieved with [`DisjointSets::find`].
+/// The sets containing two elements can be joined with [`DisjointSets::union`].
+/// When the sets are extracted with [`DisjointSets::extract`], some values may be omitted.
+///
+/// # Examples
+///
+/// ```
+/// use gbwt::support::DisjointSets;
+///
+/// let mut sets = DisjointSets::new(7, 2);
+/// assert_eq!(sets.len(), 7);
+/// assert_eq!(sets.offset(), 2);
+///
+/// sets.union(3, 4);
+/// sets.union(3, 5);
+/// sets.union(5, 7);
+/// assert_eq!(sets.find(7), 3 - sets.offset());
+///
+/// let sets = sets.extract(|value| value != 6);
+/// assert_eq!(sets.len(), 3);
+/// assert_eq!(sets[0], vec![2]);
+/// assert_eq!(sets[1], vec![3, 4, 5, 7]);
+/// assert_eq!(sets[2], vec![8]);
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DisjointSets {
+    // Offset of the parent.
+    parents: Vec<usize>,
+    // Rank is at most ~log(size).
+    ranks: Vec<u8>,
+    // Value `i` is stored at offset `i - offset`.
+    offset: usize,
+}
+
+impl DisjointSets {
+    /// Returns a new `DisjointSets` structure with the given length and starting offset.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `len + offset > usize::MAX`.
+    pub fn new(len: usize, offset: usize) -> Self {
+        if len > usize::MAX - offset {
+            panic!("DisjointSets: length {} + offset {} too large", len, offset);
+        }
+        DisjointSets {
+            parents: (0..len).collect(),
+            ranks: vec![0; len],
+            offset,
+        }
+    }
+
+    /// Returns the number of values in the structure.
+    pub fn len(&self) -> usize {
+        self.parents.len()
+    }
+
+    /// Returns the starting offset for the values.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the starting offset for the values.
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    /// Returns the root element for the set containing the given value.
+    ///
+    /// Replaces the parent of each element with the grandparent to speed up further queries.
+    /// This is also known as path splitting.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `value < self.offset()` or `value >= self.len() + self.offset`.
+    pub fn find(&mut self, value: usize) -> usize {
+        let mut value = value - self.offset;
+        while self.parents[value] != value {
+            let next = self.parents[value];
+            self.parents[value] = self.parents[next];
+            value = next;
+        }
+        value
+    }
+
+    /// Joins the sets containing values `a` and `b`.
+    ///
+    /// Uses union by rank.
+    /// The rank of a set containing a single value is 0.
+    /// The root of the set with the lower rank becomes the child of the root of the set with the higher rank.
+    /// If the ranks are equal, `find(a)` becomes the root and the rank of the new set increases by 1.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `value < self.offset()` or `value >= self.len() + self.offset`, for values `a` and `b`.
+    pub fn union(&mut self, a: usize, b: usize) {
+        let mut a = self.find(a);
+        let mut b = self.find(b);
+        if a == b {
+            return;
+        }
+        if self.ranks[a] < self.ranks[b] {
+            mem::swap(&mut a, &mut b);
+        }
+        self.parents[b] = a;
+        if self.ranks[b] == self.ranks[a] {
+            self.ranks[a] += 1;
+        }
+    }
+
+    /// Returns the sets corresponding to this structure.
+    ///
+    /// Only includes values for which `include_value(value) == true`.
+    /// The sets will be sorted by the minimum value, and each set will be in sorted order.
+    pub fn extract<F: Fn(usize) -> bool>(&mut self, include_value: F) -> Vec<Vec<usize>> {
+        let mut result: Vec<Vec<usize>> = Vec::new();
+        let mut root_to_set: HashMap<usize, usize> = HashMap::new();
+
+        for value in self.offset..self.len() + self.offset {
+            if !include_value(value) {
+                continue;
+            }
+            let root = self.find(value);
+            if !root_to_set.contains_key(&root) {
+                root_to_set.insert(root, result.len());
+                result.push(Vec::new());
+            }
+            if let Some(&set) = root_to_set.get(&root) {
+                result[set].push(value);
+            }
+        }
+
+        result
+    }
+}
 
 //-----------------------------------------------------------------------------

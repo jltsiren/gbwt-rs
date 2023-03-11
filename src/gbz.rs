@@ -18,7 +18,7 @@ use crate::bwt::Record;
 use crate::gbwt::{SequenceIter, Metadata};
 use crate::graph::SegmentIter as GraphSegmentIter;
 use crate::headers::{Header, GBZPayload};
-use crate::support::Tags;
+use crate::support::{DisjointSets, Tags};
 use crate::support;
 
 use simple_sds::bit_vector::{BitVector, OneIter, Identity};
@@ -440,6 +440,60 @@ impl GBZ {
             state,
             flip: true,
         })
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+/// Algorithms
+impl GBZ {
+    /// Returns the weakly connected components in the graph.
+    ///
+    /// The components are sorted by minimum node id, and the nodes in each component are in sorted order.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use gbwt::GBZ;
+    /// use gbwt::support;
+    /// use simple_sds::serialize;
+    ///
+    /// let filename = support::get_test_data("example.gbz");
+    /// let gbz: GBZ = serialize::load_from(&filename).unwrap();
+    ///
+    /// let components = gbz.weakly_connected_components();
+    /// assert_eq!(components.len(), 2);
+    /// assert_eq!(components[0], vec![11, 12, 13, 14, 15, 16, 17]);
+    /// assert_eq!(components[1], vec![21, 22, 23, 24, 25]);
+    /// ```
+    pub fn weakly_connected_components(&self) -> Vec<Vec<usize>> {
+        let min_id = self.min_node();
+        let max_id = self.max_node();
+        let mut found = RawVector::with_len(max_id + 1 - min_id, false);
+        let mut sets = DisjointSets::new(max_id + 1 - min_id, min_id);
+
+        for start_id in self.node_iter() {
+            if found.bit(start_id - min_id) {
+                continue;
+            }
+            let mut stack: Vec<(usize, Orientation)> = vec![(start_id, Orientation::Forward)];
+            while let Some((node_id, orientation)) = stack.pop() {
+                if found.bit(node_id - min_id) {
+                    continue;
+                }
+                found.set_bit(node_id - min_id, true);
+                for (next_id, next_o) in self.successors(node_id, orientation).unwrap() {
+                    sets.union(node_id, next_id);
+                    stack.push((next_id, next_o));
+                }
+                for (prev_id, prev_o) in self.predecessors(node_id, orientation).unwrap() {
+                    sets.union(node_id, prev_id);
+                    stack.push((prev_id, prev_o));
+                }
+            }
+        }
+
+        sets.extract(|node_id| self.has_node(node_id))
     }
 }
 
