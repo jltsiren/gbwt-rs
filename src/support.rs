@@ -9,6 +9,7 @@ use simple_sds::bits;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::collections::btree_map::Iter as TagIter;
+use std::collections::hash_map::Entry;
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
@@ -1309,12 +1310,14 @@ impl DisjointSets {
                 continue;
             }
             let root = self.find(value);
-            if !root_to_set.contains_key(&root) {
-                root_to_set.insert(root, result.len());
-                result.push(Vec::new());
-            }
-            if let Some(&set) = root_to_set.get(&root) {
-                result[set].push(value);
+            match root_to_set.entry(root) {
+                Entry::Occupied(e) => {
+                    result[*e.get()].push(value);
+                },
+                Entry::Vacant(e) => {
+                    e.insert(result.len());
+                    result.push(vec![value]);
+                },
             }
         }
 

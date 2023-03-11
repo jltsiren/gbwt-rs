@@ -533,11 +533,7 @@ impl<'a> Record<'a> {
         if range.is_empty() || node == ENDMARKER {
             return None;
         }
-        let rank = self.edge_to(node);
-        if rank == None {
-            return None;
-        }
-        let rank = rank.unwrap();
+        let rank = self.edge_to(node)?;
 
         let mut result = self.offset(rank)..self.offset(rank);
         let mut offset = 0;
@@ -572,11 +568,7 @@ impl<'a> Record<'a> {
         if range.is_empty() || node == ENDMARKER {
             return None;
         }
-        let rank = self.edge_to(node);
-        if rank == None {
-            return None;
-        }
-        let rank = rank.unwrap();
+        let rank = self.edge_to(node)?;
         let reverse = support::flip_node(node);
 
         let mut result = self.offset(rank)..self.offset(rank);
