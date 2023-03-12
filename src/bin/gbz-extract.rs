@@ -114,7 +114,7 @@ fn main() -> Result<(), String> {
     let name_name = format!("{}.names", config.output.as_ref().unwrap());
     let mut name_file = options.open(name_name).map_err(|e| e.to_string())?;
     for path_id in selected_paths {
-        let (sequence, positions) = extract_sequence(&gbz, path_id, Orientation::Forward);
+        let (sequence, positions) = extract_sequence(&gbz, path_id, Orientation::Forward, &config);
         seq_file.write_all(&sequence).map_err(|e| e.to_string())?;
         positions.serialize_body(&mut pos_file).map_err(|e| e.to_string())?;
         let path_name = path_name_as_line(metadata, path_id);
@@ -135,12 +135,12 @@ fn main() -> Result<(), String> {
 //-----------------------------------------------------------------------------
 
 // FIXME add option for reverse complement
-// FIXME add terminator character
 // FIXME add option for positions
 struct Config {
     input: Option<String>,
     output: Option<String>,
     contig: Option<String>,
+    endmarker: u8,
     threads: usize,
     verbose: bool,
 }
@@ -158,6 +158,8 @@ impl Config {
         opts.optopt("c", "contig", "restrict to components containing this contig", "STR");
         opts.optopt("o", "output", "base name for output", "FILE");
         opts.optopt("t", "threads", "number of threads for extracting paths (default 1)", "INT");
+        opts.optopt("", "endmarker-value", "byte value used to terminate sequences (default 0)", "INT");
+        opts.optopt("", "endmarker-char", "character used to terminate sequences", "CHAR");
         opts.optflag("v", "verbose", "print progress information");
         let matches = opts.parse(&args[1..]).map_err(|x| x.to_string())?;
 
@@ -165,6 +167,7 @@ impl Config {
             input: None,
             output: None,
             contig: None,
+            endmarker: 0,
             threads: Self::MIN_THREADS,
             verbose: false,
         };
@@ -192,6 +195,19 @@ impl Config {
                 },
             }
         }
+        if let Some(s) = matches.opt_str("endmarker-value") {
+            match s.parse::<u8>() {
+                Ok(n) => config.endmarker = n,
+                Err(f) => return Err(format!("--endmarker-value: {}", f.to_string())),
+            }
+        }
+        if let Some(s) = matches.opt_str("endmarker-char") {
+            if s.as_bytes().len() == 1 {
+                config.endmarker = s.as_bytes()[0];
+            } else {
+                return Err(format!("Invalid endmarker character: {}", s));
+            }
+        }
         if matches.opt_present("v") {
             config.verbose = true;
         }
@@ -202,6 +218,9 @@ impl Config {
             let header = format!("Usage: {} [options] -o output graph.gbz", program);
             eprint!("{}", opts.usage(&header));
             process::exit(1);
+        }
+        if config.output.is_none() {
+            return Err("Option -o / --output is mandatory".to_string());
         }
 
         Ok(config)
@@ -233,7 +252,7 @@ fn reverse_complement(sequence: &[u8]) -> Vec<u8> {
     result
 }
 
-fn extract_sequence(gbz: &GBZ, path_id: usize, orientation: Orientation) -> (Vec<u8>, Vec<u64>) {
+fn extract_sequence(gbz: &GBZ, path_id: usize, orientation: Orientation, config: &Config) -> (Vec<u8>, Vec<u64>) {
     let mut sequence: Vec<u8> = Vec::new();
     let mut positions: Vec<u64> = Vec::new();
 
@@ -244,6 +263,7 @@ fn extract_sequence(gbz: &GBZ, path_id: usize, orientation: Orientation) -> (Vec
         } else {
             sequence.extend_from_slice(seq);
         }
+        // FIXME warn if the node is too long
         let mut pos = encode_start(node_id, node_o);
         for _ in 0..seq.len() {
             positions.push(pos);
@@ -251,8 +271,8 @@ fn extract_sequence(gbz: &GBZ, path_id: usize, orientation: Orientation) -> (Vec
         }
     }
 
-    // Append terminators.
-    sequence.push(0);
+    // Append the endmarker.
+    sequence.push(config.endmarker);
     positions.push(0);
 
     (sequence, positions)
