@@ -34,3 +34,10 @@ required-features = ["binaries"]
 test = false
 bench = false
 doc = false
+
+[[bin]]
+name = "gbz-extract"
+required-features = ["binaries"]
+test = false
+bench = false
+doc = false
