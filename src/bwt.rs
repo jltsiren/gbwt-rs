@@ -350,10 +350,16 @@ impl<'a> Record<'a> {
         })
     }
 
-    // Decompresses the list of edges from a byte slice.
-    //
-    // The second return value is slice offset after the edge list.
-    fn decompress_edges(bytes: &[u8]) -> Option<(Vec<Pos>, usize)> {
+    /// Decompresses the adjacency list from a byte slice.
+    ///
+    /// Returns the list of edges and the slice offset after the adjacency
+    /// list, or `None` if the list is empty.
+    ///
+    /// # Panics
+    ///
+    /// May panic if slice does not encode an adjacency list or if the slice
+    /// ends early.
+    pub fn decompress_edges(bytes: &[u8]) -> Option<(Vec<Pos>, usize)> {
         let mut iter = ByteCodeIter::new(bytes);
         let sigma = iter.next().unwrap();
         if sigma == 0 {
