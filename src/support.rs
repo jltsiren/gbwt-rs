@@ -43,6 +43,22 @@ impl Orientation {
     }
 }
 
+// FIXME optimize
+/// Returns the reverse complement of the sequence.
+pub fn reverse_complement(sequence: &[u8]) -> Vec<u8> {
+    let mut result: Vec<u8> = Vec::with_capacity(sequence.len());
+    for &c in sequence.iter().rev() {
+        result.push(match c {
+            b'A' => b'T',
+            b'C' => b'G',
+            b'G' => b'C',
+            b'T' => b'A',
+            c => c,
+        });
+    }
+    result
+}
+
 //-----------------------------------------------------------------------------
 
 /// A run as a (value, length) pair.
