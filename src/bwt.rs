@@ -50,7 +50,7 @@ use simple_sds::serialize::Serialize;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
-use std::iter::{FusedIterator};
+use std::iter::FusedIterator;
 use std::ops::Range;
 use std::io;
 
@@ -112,15 +112,34 @@ impl BWT {
         self.len() == 0
     }
 
+    // Returns the byte slice corresponding to record `i`, assuming that it exists.
+    fn record_bytes(&self, i: usize) -> &[u8] {
+        let mut iter = self.index.select_iter(i);
+        let (_, start) = iter.next().unwrap();
+        let limit = if i + 1 < self.len() { iter.next().unwrap().1 } else { self.data.len() };
+        &self.data[start..limit]
+    }
+
     /// Returns the `i`th record, or `None` if there is no such node.
     pub fn record(&self, i: usize) -> Option<Record> {
         if i >= self.len() {
             return None;
         }
-        let mut iter = self.index.select_iter(i);
-        let (_, start) = iter.next().unwrap();
-        let limit = if i + 1 < self.len() { iter.next().unwrap().1 } else { self.data.len() };
-        Record::new(i, &self.data[start..limit])
+        let bytes = self.record_bytes(i);
+        Record::new(i, bytes)
+    }
+
+    /// Returns the compressed representation of the `i`th record, partitioned
+    /// into edges and BWT, or `None` if there is no such record.
+    pub fn compressed_record(&self, i: usize) -> Option<(&[u8], &[u8])> {
+        if i >= self.len() {
+            return None;
+        }
+
+        let bytes = self.record_bytes(i);
+        let offset = Record::skip_edges(bytes)?;
+
+        Some((&bytes[..offset], &bytes[offset..]))
     }
 
     /// Returns an iterator over the records in the BWT.
@@ -323,15 +342,30 @@ impl<'a> Record<'a> {
         if bytes.is_empty() {
             return None;
         }
+        let (edges, offset) = Self::decompress_edges(bytes)?;
+        Some(Record {
+            id,
+            edges,
+            bwt: &bytes[offset..],
+        })
+    }
 
-        // Determine the outdegree.
+    /// Decompresses the adjacency list from a byte slice.
+    ///
+    /// Returns the list of edges and the slice offset after the adjacency
+    /// list, or `None` if the list is empty.
+    ///
+    /// # Panics
+    ///
+    /// May panic if slice does not encode an adjacency list or if the slice
+    /// ends early.
+    pub fn decompress_edges(bytes: &[u8]) -> Option<(Vec<Pos>, usize)> {
         let mut iter = ByteCodeIter::new(bytes);
         let sigma = iter.next().unwrap();
         if sigma == 0 {
             return None;
         }
 
-        // Decompress the edges.
         let mut edges: Vec<Pos> = Vec::new();
         let mut prev = 0;
         for _ in 0..sigma {
@@ -341,11 +375,24 @@ impl<'a> Record<'a> {
             edges.push(Pos::new(node, offset));
         }
 
-        Some(Record {
-            id,
-            edges,
-            bwt: &bytes[iter.offset()..],
-        })
+        Some((edges, iter.offset()))
+    }
+
+    // Skips the list of edges in the byte slice and returns the offset
+    // after the edge list.
+    fn skip_edges(bytes: &[u8]) -> Option<usize> {
+        let mut iter = ByteCodeIter::new(bytes);
+        let sigma = iter.next().unwrap();
+        if sigma == 0 {
+            return None;
+        }
+
+        for _ in 0..sigma {
+            let _ = iter.next().unwrap();
+            let _ = iter.next().unwrap();
+        }
+
+        Some(iter.offset())
     }
 
     /// Returns the identifier of the record.

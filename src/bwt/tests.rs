@@ -119,6 +119,19 @@ fn check_records(bwt: &BWT, edges: &[Vec<Pos>]) {
                 assert_eq!(record.offset(j), curr_edges[j].offset, "Invalid offset {} in record {}", j, i);
             }
         }
+
+        // Compressed record.
+        let compressed = bwt.compressed_record(i);
+        assert_eq!(compressed.is_none(), curr_edges.is_empty(), "Invalid compressed record {} existence", i);
+        if let Some((edge_bytes, bwt_bytes)) = compressed {
+            let decompressed = Record::decompress_edges(edge_bytes);
+            assert!(decompressed.is_some(), "Could not decompress edges for record {}", i);
+            let (edges, offset) = decompressed.unwrap();
+            assert_eq!(offset, edge_bytes.len(), "Invalid offset after edge list for record {}", i);
+            assert_eq!(&edges, curr_edges, "Invalid edges in compressed record {}", i);
+            let record = bwt.record(i).unwrap();
+            assert_eq!(bwt_bytes, record.bwt, "Invalid BWT in compressed record {}", i);
+        }
     }
 }
 

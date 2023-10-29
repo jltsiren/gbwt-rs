@@ -9,6 +9,37 @@ use rand::rngs::ThreadRng;
 //-----------------------------------------------------------------------------
 
 #[test]
+fn reverse_sequences() {
+    {
+        let sequence = b"";
+        let truth = b"";
+        let rc = reverse_complement(sequence);
+        assert_eq!(&rc, truth, "Invalid reverse complement for an empty sequence");
+    }
+
+    {
+        let sequence = b"C";
+        let truth = b"G";
+        let rc = reverse_complement(sequence);
+        assert_eq!(&rc, truth, "Invalid reverse complement for a sequence of length 1");
+    }
+
+    {
+        let sequence = b"GATTACA";
+        let truth = b"TGTAATC";
+        let rc = reverse_complement(sequence);
+        assert_eq!(&rc, truth, "Invalid reverse complement for a sequence with odd length");
+    }
+
+    {
+        let sequence = b"GATTACAT";
+        let truth = b"ATGTAATC";
+        let rc = reverse_complement(sequence);
+        assert_eq!(&rc, truth, "Invalid reverse complement for a sequence with even length");
+    }
+}
+
+#[test]
 fn reverse_paths() {
     let original = vec![1, 2, 4, 6];
     let reversed = reverse_path(&original);

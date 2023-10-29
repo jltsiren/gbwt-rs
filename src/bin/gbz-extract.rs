@@ -1,5 +1,5 @@
 use gbwt::{GBZ, Orientation, Metadata};
-use gbwt::internal;
+use gbwt::{internal, support};
 
 use simple_sds::serialize::Serialize;
 use simple_sds::serialize;
@@ -165,28 +165,13 @@ impl Config {
 
 //-----------------------------------------------------------------------------
 
-// FIXME optimize and move to support
-fn reverse_complement(sequence: &[u8]) -> Vec<u8> {
-    let mut result: Vec<u8> = Vec::with_capacity(sequence.len());
-    for &c in sequence.iter().rev() {
-        result.push(match c {
-            b'A' => b'T',
-            b'C' => b'G',
-            b'G' => b'C',
-            b'T' => b'A',
-            c => c,
-        });
-    }
-    result
-}
-
 fn extract_sequence(gbz: &GBZ, path_id: usize, orientation: Orientation, config: &Config) -> Vec<u8> {
     let mut sequence: Vec<u8> = Vec::new();
 
     for (node_id, node_o) in gbz.path(path_id, orientation).unwrap() {
         let seq = gbz.sequence(node_id).unwrap();
         if node_o == Orientation::Reverse {
-            sequence.extend(reverse_complement(seq));
+            sequence.extend(support::reverse_complement(seq));
         } else {
             sequence.extend_from_slice(seq);
         }
