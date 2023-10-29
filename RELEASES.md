@@ -1,5 +1,10 @@
 # GBWT-rs releases
 
+## Current version
+
+* `gbunzip`:
+  * Option for using [PanSN](https://github.com/pangenome/PanSN-spec) path names.
+
 ## GBWT-rs 0.2.2 (2022-02-22)
 
 Another patch release for the GBZ paper.

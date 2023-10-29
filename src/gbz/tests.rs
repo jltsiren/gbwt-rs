@@ -8,10 +8,6 @@ use std::collections::{BTreeSet, BTreeMap, HashSet};
 
 //-----------------------------------------------------------------------------
 
-fn name(orientation: Orientation) -> &'static str {
-     if orientation == Orientation::Forward { "(forward)" } else { "(reverse)" }
-}
-
 fn check_nodes(gbz: &GBZ, true_nodes: &[(usize, &str)]) {
     let mut truth: BTreeMap<usize, String> = BTreeMap::new();
     for (key, value) in true_nodes.iter() {
@@ -71,19 +67,18 @@ fn get_pred_succ<T: Iterator<Item = usize>>(edges: &[(usize, Orientation, usize,
 }
 
 fn check_pred_succ(gbz: &GBZ, predecessors: &Neighbors, successors: &Neighbors, node_id: usize, orientation: Orientation) {
-    let name = name(orientation);
     if gbz.has_node(node_id) {
         let truth = predecessors.get(&(node_id, orientation)).unwrap();
         let iter = gbz.predecessors(node_id, orientation);
-        assert!(iter.is_some(), "Could not find predecessors for node {} {}", node_id, name);
-        assert!(iter.unwrap().eq(truth.iter().cloned()), "Invalid predecessors for node {} {}", node_id, name);
+        assert!(iter.is_some(), "Could not find predecessors for node {} ({})", node_id, orientation);
+        assert!(iter.unwrap().eq(truth.iter().cloned()), "Invalid predecessors for node {} ({})", node_id, orientation);
         let truth = successors.get(&(node_id, orientation)).unwrap();
         let iter = gbz.successors(node_id, orientation);
-        assert!(iter.is_some(), "Could not find successors for node {} {}", node_id, name);
-        assert!(iter.unwrap().eq(truth.iter().cloned()), "Invalid successors for node {} {}", node_id, name);
+        assert!(iter.is_some(), "Could not find successors for node {} ({})", node_id, orientation);
+        assert!(iter.unwrap().eq(truth.iter().cloned()), "Invalid successors for node {} ({})", node_id, orientation);
     } else {
-        assert!(gbz.predecessors(node_id, orientation).is_none(), "Found predecessors for non-existent node {} {}", node_id, name);
-        assert!(gbz.successors(node_id, orientation).is_none(), "Found successors for non-existent node {} {}", node_id, name);
+        assert!(gbz.predecessors(node_id, orientation).is_none(), "Found predecessors for non-existent node {} ({})", node_id, orientation);
+        assert!(gbz.successors(node_id, orientation).is_none(), "Found successors for non-existent node {} ({})", node_id, orientation);
     }
 }
 
@@ -112,13 +107,13 @@ fn check_states(gbz: &GBZ) {
             let state = gbz.search_state(node_id, orientation);
             if gbz.has_node(node_id) {
                 let truth = gbz.index.bd_find(support::encode_node(node_id, orientation));
-                assert_eq!(state, truth, "Invalid search state for node {} {}", node_id, name(orientation));
+                assert_eq!(state, truth, "Invalid search state for node {} ({})", node_id, orientation);
                 if let Some(state) = state {
                     stack.push(state.clone());
                     visited.insert(state);
                 }
             } else {
-                assert!(state.is_none(), "Got a search state for nonexistent node {} {}", node_id, name(orientation));
+                assert!(state.is_none(), "Got a search state for nonexistent node {} ({})", node_id, orientation);
             }
         }
     }
@@ -395,26 +390,25 @@ fn links() {
     // Validate the links.
     for segment in gbz.segment_iter().unwrap() {
         for orientation in [Orientation::Forward, Orientation::Reverse] {
-            let name = name(orientation);
             let truth = predecessors.get(&(segment.id, orientation)).unwrap();
 
             if let Some(iter) = gbz.segment_predecessors(&segment, orientation) {
-                assert!(iter.map(|(s, o)| (s.id, o)).eq(truth.iter().cloned()), "Invalid predecessors for segment {} {}", segment.id, name);
+                assert!(iter.map(|(s, o)| (s.id, o)).eq(truth.iter().cloned()), "Invalid predecessors for segment {} ({})", segment.id, orientation);
             } else {
-                panic!("Could not get predecessors for segment {} {}", segment.id, name);
+                panic!("Could not get predecessors for segment {} {}", segment.id, orientation);
             }
             for (s, _) in gbz.segment_predecessors(&segment, orientation).unwrap() {
-                assert_eq!(s, gbz.graph.segment(s.id), "Invalid predecessor segment {} for segment {} {}", s.id, segment.id, name);
+                assert_eq!(s, gbz.graph.segment(s.id), "Invalid predecessor segment {} for segment {} ({})", s.id, segment.id, orientation);
             }
 
             let truth = successors.get(&(segment.id, orientation)).unwrap();
             if let Some(iter) = gbz.segment_successors(&segment, orientation) {
-                assert!(iter.map(|(s, o)| (s.id, o)).eq(truth.iter().cloned()), "Invalid successors for segment {} {}", segment.id, name);
+                assert!(iter.map(|(s, o)| (s.id, o)).eq(truth.iter().cloned()), "Invalid successors for segment {} ({})", segment.id, orientation);
             } else {
-                panic!("Could not get successors for segment {} {}", segment.id, name);
+                panic!("Could not get successors for segment {} {}", segment.id, orientation);
             }
             for (s, _) in gbz.segment_successors(&segment, orientation).unwrap() {
-                assert_eq!(s, gbz.graph.segment(s.id), "Invalid successor segment {} for segment {} {}", s.id, segment.id, name);
+                assert_eq!(s, gbz.graph.segment(s.id), "Invalid successor segment {} for segment {} ({})", s.id, segment.id, orientation);
             }
         }
     }
@@ -449,9 +443,8 @@ fn segment_paths() {
     // Check the segments on the paths.
     for id in 0..gbz.paths() {
         for orientation in [Orientation::Forward, Orientation::Reverse] {
-            let name = name(orientation);
             for (s, _) in gbz.segment_path(id, orientation).unwrap() {
-                assert_eq!(s, gbz.graph.segment(s.id), "Invalid segment {} on path {} {}", s.id, id, name);
+                assert_eq!(s, gbz.graph.segment(s.id), "Invalid segment {} on path {} ({})", s.id, id, orientation);
             }
         }
     }
