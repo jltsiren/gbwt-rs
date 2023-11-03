@@ -350,6 +350,17 @@ impl<'a> Record<'a> {
         })
     }
 
+    /// Returns a record composed of the given parts.
+    ///
+    /// # Safety
+    ///
+    /// The record will be invalid if `edges` is empty, the edges are not in sorted order,
+    /// `bwt` does not encode a sequence of runs using [`RLE`] with alphabet size `edges.len()`,
+    /// or the offsets implied by LF-mapping do not exist in the successor records.
+    pub unsafe fn from_raw_parts(id: usize, edges: Vec<Pos>, bwt: &'a [u8]) -> Self {
+        Record { id, edges, bwt }
+    }
+
     /// Decompresses the adjacency list from a byte slice.
     ///
     /// Returns the list of edges and the slice offset after the adjacency
