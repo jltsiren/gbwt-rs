@@ -108,6 +108,9 @@ mod tests;
 /// let path_name = metadata.path(3).unwrap();
 /// assert_eq!(metadata.sample(path_name.sample()), Some("sample"));
 /// assert_eq!(metadata.contig(path_name.contig()), Some("A"));
+///
+/// let tags = gbz.tags();
+/// assert!(tags.contains_key("source"));
 /// ```
 ///
 /// # Notes
@@ -124,8 +127,13 @@ pub struct GBZ {
 
 //-----------------------------------------------------------------------------
 
-// Private utilities.
+/// Utilities.
 impl GBZ {
+    /// Returns a reference to the tags stored in the GBZ container.
+    pub fn tags(&self) -> &Tags {
+        &self.tags
+    }
+
     // Converts a node id in the original graph to a sequence id.
     #[inline]
     fn graph_node_to_sequence(&self, node_id: usize) -> usize {
@@ -392,7 +400,7 @@ impl GBZ {
         self.index.has_metadata()
     }
 
-    /// Returns the metadata stored in the GBWT index, or [`None`] if there is no metadata.
+    /// Returns a reference to the metadata stored in the GBWT index, or [`None`] if there is no metadata.
     pub fn metadata(&self) -> Option<&Metadata> {
         self.index.metadata()
     }

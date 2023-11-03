@@ -83,12 +83,14 @@ mod tests;
 /// assert_eq!(state.reverse.node, support::encode_node(12, Orientation::Reverse));
 /// assert_eq!(state.len(), 2);
 ///
-/// // Metadata.
+/// // Metadata and tags.
 /// assert!(index.has_metadata());
 /// let metadata = index.metadata().unwrap();
 /// assert_eq!(metadata.paths(), 6);
 /// assert_eq!(metadata.samples(), 2);
 /// assert_eq!(metadata.contigs(), 2);
+/// let tags = index.tags();
+/// assert!(tags.contains_key("source"));
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GBWT {
@@ -172,7 +174,7 @@ impl GBWT {
     }
 }
 
-/// Metadata.
+/// Metadata and tags.
 impl GBWT {
     /// Returns `true` if the index contains metadata.
     pub fn has_metadata(&self) -> bool {
@@ -182,6 +184,11 @@ impl GBWT {
     /// Returns a reference to the metadata, or [`None`] if there is no metadata.
     pub fn metadata(&self) -> Option<&Metadata> {
         self.metadata.as_ref()
+    }
+
+    /// Returns a reference to the tags.
+    pub fn tags(&self) -> &Tags {
+        &self.tags
     }
 }
 

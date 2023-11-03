@@ -64,6 +64,9 @@ fn index_metadata() {
     let metadata_filename = support::get_test_data("example.meta");
     let metadata: Metadata = serialize::load_from(&metadata_filename).unwrap();
     assert_eq!(index.metadata().unwrap(), &metadata, "Invalid metadata in the index");
+
+    let tags = index.tags();
+    assert!(tags.contains_key(SOURCE_KEY), "Mandatory source key {} is missing", SOURCE_KEY);
 }
 
 #[test]
