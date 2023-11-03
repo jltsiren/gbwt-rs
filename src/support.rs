@@ -16,7 +16,7 @@ use std::iter::FusedIterator;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::str::Utf8Error;
-use std::{cmp, io, mem};
+use std::{cmp, fmt, io, mem};
 
 #[cfg(test)]
 mod tests;
@@ -39,6 +39,15 @@ impl Orientation {
         match *self {
             Self::Forward => Self::Reverse,
             Self::Reverse => Self::Forward,
+        }
+    }
+}
+
+impl fmt::Display for Orientation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Orientation::Forward => write!(f, "forward"),
+            Orientation::Reverse => write!(f, "reverse"),
         }
     }
 }
