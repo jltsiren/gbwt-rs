@@ -61,7 +61,13 @@ pub const SOURCE_KEY: &str = "source";
 /// Value of the source tag.
 pub const SOURCE_VALUE: &str = "jltsiren/gbwt-rs";
 
-/// Sample name for named / reference paths.
+/// Sample name for generic named paths.
+///
+/// This sample name is used for GFA P-lines with opaque string names. The actual name
+/// is stored as a contig name.
 pub const REF_SAMPLE: &str = "_gbwt_ref";
+
+/// Key for the tag listing the names of reference samples.
+pub const REFERENCE_SAMPLES_KEY: &str = "reference_samples";
 
 //-----------------------------------------------------------------------------

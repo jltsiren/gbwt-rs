@@ -1,5 +1,5 @@
-use gbwt::{GBZ, Orientation};
-use gbwt::REF_SAMPLE;
+use gbwt::{GBWT, GBZ, Orientation};
+use gbwt::{REF_SAMPLE, REFERENCE_SAMPLES_KEY};
 use gbwt::internal;
 
 use simple_sds::serialize::Serialize;
@@ -187,9 +187,21 @@ fn write_gfa(gbz: &GBZ, config: &Config) -> io::Result<()> {
     Ok(())
 }
 
+fn write_gfa_header<T: Write>(gbz: &GBZ, output: &mut T) -> io::Result<()> {
+    let index: &GBWT = gbz.as_ref();
+    let tags = index.tags();
+    let header = if let Some(sample_names) = tags.get(REFERENCE_SAMPLES_KEY) {
+        format!("H\tVN:Z:1.1\tRS:Z:{}\n", sample_names)
+    } else {
+        "H\tVN:Z:1.1\n".to_string()
+    };
+    output.write_all(header.as_ref())?;
+    Ok(())
+}
+
 fn write_gfa_impl<T: Write + Send>(gbz: &GBZ, output: T, config: &Config) -> io::Result<()> {
     let mut buffer = BufWriter::with_capacity(config.buffer_size, output);
-    buffer.write_all(b"H\tVN:Z:1.1\n")?;
+    write_gfa_header(gbz, &mut buffer)?;
     write_segments(gbz, &mut buffer, config)?;
     write_links(gbz, &mut buffer, config)?;
 
