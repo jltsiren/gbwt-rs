@@ -148,6 +148,30 @@ pub fn flip_node(id: usize) -> usize {
     id ^ 1
 }
 
+//-----------------------------------------------------------------------------
+
+/// Returns `true` if the given edge is in canonical orientation.
+///
+/// An edge is canonical, if the destination node (`to`) has a higher identifier than the source node (`from`).
+/// A self-loop with at least one node in forward orientation is also canonical.
+pub fn edge_is_canonical(from: (usize, Orientation), to: (usize, Orientation)) -> bool {
+    if from.1 == Orientation::Forward {
+        to.0 >= from.0
+    } else {
+        (to.0 > from.0) || (to.0 == from.0 && to.1 == Orientation::Forward)
+    }
+}
+
+/// Returns `true` if the given edge is in canonical orientation.
+///
+/// This version takes the edge as a pair of GBWT node identifiers.
+/// See [`edge_is_canonical`] for more information.
+pub fn encoded_edge_is_canonical(from: usize, to: usize) -> bool {
+    edge_is_canonical(decode_node(from), decode_node(to))
+}
+
+//-----------------------------------------------------------------------------
+
 /// Returns the sequence identifier corresponding to the given path and orientation.
 ///
 /// This encoding is used in bidirectional GBWT indexes.
@@ -198,14 +222,56 @@ pub fn flip_path(id: usize) -> usize {
     id ^ 1
 }
 
+/// Returns `true` if the path is in canonical orientation.
+///
+/// A path is canonical, if:
+///
+/// 1. It is empty.
+/// 2. Both the first and the last node are in forward orientation.
+/// 3. The edge from the first node to the last node would be canonical.
+pub fn path_is_canonical(path: &[(usize, Orientation)]) -> bool {
+    if path.is_empty() {
+        return true;
+    }
+
+    let first = path[0];
+    let last = path[path.len() - 1];
+    if first.1 == last.1 {
+        return first.1 == Orientation::Forward;
+    }
+
+    edge_is_canonical(first, last)
+}
+
+/// Returns `true` if the path is in canonical orientation.
+///
+/// The path is assumed to be a sequence of GBWT node identifiers.
+/// See [`path_is_canonical`] for more information.
+pub fn encoded_path_is_canonical(path: &[usize]) -> bool {
+    if path.is_empty() {
+        return true;
+    }
+
+    let first = decode_node(path[0]);
+    let last = decode_node(path[path.len() - 1]);
+    if first.1 == last.1 {
+        return first.1 == Orientation::Forward;
+    }
+
+    edge_is_canonical(first, last)
+}
+
 /// Returns the reverse of the given path.
 ///
-/// The reverse path visits the other orientation of each node in reverse order.
+/// The path is assumed to be a sequence of GBWT node identifiers.
+/// A reverse path visits the other orientation of each node in reverse order.
 pub fn reverse_path(path: &[usize]) -> Vec<usize> {
     let mut result: Vec<usize> = path.iter().map(|x| flip_node(*x)).collect();
     result.reverse();
     result
 }
+
+//-----------------------------------------------------------------------------
 
 /// Returns the intersection of two ranges.
 #[inline]

@@ -3,7 +3,15 @@
 ## Current version
 
 * `gbunzip`:
+  * Outputs GFA version 1.1.
   * Option for using [PanSN](https://github.com/pangenome/PanSN-spec) path names.
+  * Suppors the reference samples header tag `RS` used by vg.
+* Terminology change for compatibility with vg:
+  * Paths with sample name `_gbwt_ref` are now generic named paths.
+  * Paths can be promoted to reference paths by specifying sample names in GBWT tag `reference_samples`.
+* New functionality:
+  * `GBZ::weakly_connected_components` for finding weakly connected components in the graph.
+  * Functions for determining if an edge or a path is in canonical orientation.
 
 ## GBWT-rs 0.2.2 (2022-02-22)
 
