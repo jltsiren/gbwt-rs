@@ -52,18 +52,27 @@ impl fmt::Display for Orientation {
     }
 }
 
-// FIXME optimize
-/// Returns the reverse complement of the sequence.
+const fn generate_complement_table() -> [u8; 256] {
+    let mut result: [u8; 256] = [b'N'; 256];
+    result[b'A' as usize] = b'T'; result[b'a' as usize] = b'T';
+    result[b'C' as usize] = b'G'; result[b'c' as usize] = b'G';
+    result[b'G' as usize] = b'C'; result[b'g' as usize] = b'C';
+    result[b'T' as usize] = b'A'; result[b't' as usize] = b'A';
+    result
+}
+
+/// Complement table for DNA bases, normalized to upper case.
+///
+/// Invalid characters are mapped to `N`.
+pub const COMPLEMENT: [u8; 256] = generate_complement_table();
+
+/// Returns the reverse complement of the sequence, normalized to upper case.
+///
+/// Invalid characters are mapped to `N`.
 pub fn reverse_complement(sequence: &[u8]) -> Vec<u8> {
     let mut result: Vec<u8> = Vec::with_capacity(sequence.len());
     for &c in sequence.iter().rev() {
-        result.push(match c {
-            b'A' => b'T',
-            b'C' => b'G',
-            b'G' => b'C',
-            b'T' => b'A',
-            c => c,
-        });
+        result.push(COMPLEMENT[c as usize]);
     }
     result
 }
