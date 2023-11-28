@@ -165,7 +165,7 @@ pub fn edge_is_canonical(from: (usize, Orientation), to: (usize, Orientation)) -
 /// Returns `true` if the given edge is in canonical orientation.
 ///
 /// This version takes the edge as a pair of GBWT node identifiers.
-/// See [`edge_is_canonical`] for more information.
+/// See [`edge_is_canonical`] for more information on canonicality and [`crate::GBWT`] on GBWT node identifiers.
 pub fn encoded_edge_is_canonical(from: usize, to: usize) -> bool {
     edge_is_canonical(decode_node(from), decode_node(to))
 }
@@ -246,7 +246,7 @@ pub fn path_is_canonical(path: &[(usize, Orientation)]) -> bool {
 /// Returns `true` if the path is in canonical orientation.
 ///
 /// The path is assumed to be a sequence of GBWT node identifiers.
-/// See [`path_is_canonical`] for more information.
+/// See [`path_is_canonical`] for more information on canonicality and [`crate::GBWT`] on GBWT node identifiers.
 pub fn encoded_path_is_canonical(path: &[usize]) -> bool {
     if path.is_empty() {
         return true;
@@ -970,7 +970,7 @@ impl<'a> ByteCodeIter<'a> {
         }
     }
 
-    /// Returns the next byte from the slice, or `None` if there are no more bytes left.
+    /// Returns the next byte from the slice, or [`None`] if there are no more bytes left.
     pub fn byte(&mut self) -> Option<u8> {
         if self.offset >= self.bytes.len() {
             return None;
@@ -1217,12 +1217,12 @@ impl<'a> RLEIter<'a> {
         }
     }
 
-    /// Returns the next byte from the slice, or `None` if there are no more bytes left.
+    /// Returns the next byte from the slice, or [`None`] if there are no more bytes left.
     pub fn byte(&mut self) -> Option<u8> {
         self.source.byte()
     }
 
-    /// Returns the next [`ByteCode`]-encoded integer from the slice, or `None` if no more integers can be decoded.
+    /// Returns the next [`ByteCode`]-encoded integer from the slice, or [`None`] if no more integers can be decoded.
     pub fn int(&mut self) -> Option<usize> {
         self.source.next()
     }

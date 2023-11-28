@@ -204,7 +204,7 @@ impl AsRef<BWT> for GBWT {
 impl GBWT {
     /// Returns the first position in sequence `id`.
     ///
-    /// The return value is[`None`] if no such sequence exists or the sequence is empty.
+    /// The return value is [`None`] if no such sequence exists or the sequence is empty.
     pub fn start(&self, id: usize) -> Option<Pos> {
         if id < self.endmarker.len() && self.endmarker[id].node != ENDMARKER {
             Some(self.endmarker[id])

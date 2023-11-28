@@ -120,7 +120,7 @@ impl BWT {
         &self.data[start..limit]
     }
 
-    /// Returns the `i`th record, or `None` if there is no such node.
+    /// Returns the `i`th record, or [`None`] if there is no such node.
     pub fn record(&self, i: usize) -> Option<Record> {
         if i >= self.len() {
             return None;
@@ -130,7 +130,7 @@ impl BWT {
     }
 
     /// Returns the compressed representation of the `i`th record, partitioned
-    /// into edges and BWT, or `None` if there is no such record.
+    /// into edges and BWT, or [`None`] if there is no such record.
     pub fn compressed_record(&self, i: usize) -> Option<(&[u8], &[u8])> {
         if i >= self.len() {
             return None;
@@ -337,7 +337,7 @@ pub struct Record<'a> {
 }
 
 impl<'a> Record<'a> {
-    /// Returns a record corresponding to the byte slice, or `None` if the record would be empty.
+    /// Returns a record corresponding to the byte slice, or [`None`] if the record would be empty.
     pub fn new(id: usize, bytes: &'a [u8]) -> Option<Self> {
         if bytes.is_empty() {
             return None;
@@ -364,7 +364,7 @@ impl<'a> Record<'a> {
     /// Decompresses the adjacency list from a byte slice.
     ///
     /// Returns the list of edges and the slice offset after the adjacency
-    /// list, or `None` if the list is empty.
+    /// list, or [`None`] if the list is empty.
     ///
     /// # Panics
     ///
