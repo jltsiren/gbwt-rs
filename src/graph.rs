@@ -38,7 +38,7 @@ mod tests;
 /// ## Sequences
 ///
 /// ```
-/// use gbwt::Graph;
+/// use gbwt::graph::Graph;
 /// use gbwt::support;
 /// use simple_sds::serialize;
 ///
@@ -57,7 +57,8 @@ mod tests;
 /// ## Segments
 ///
 /// ```
-/// use gbwt::{Graph, Segment};
+/// use gbwt::Segment;
+/// use gbwt::graph::Graph;
 /// use gbwt::support;
 /// use simple_sds::serialize;
 ///
@@ -373,7 +374,8 @@ impl<'a> Segment<'a> {
 /// # Examples
 ///
 /// ```
-/// use gbwt::{Graph, Segment};
+/// use gbwt::Segment;
+/// use gbwt::graph::Graph;
 /// use gbwt::support;
 /// use simple_sds::serialize;
 ///
