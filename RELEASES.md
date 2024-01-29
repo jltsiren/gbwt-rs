@@ -2,6 +2,8 @@
 
 ## Current version
 
+## GBWT-rs 0.3.0 (2024-01-29)
+
 * `gbunzip`:
   * Outputs GFA version 1.1.
   * Option for using [PanSN](https://github.com/pangenome/PanSN-spec) path names.
