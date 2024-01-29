@@ -182,6 +182,7 @@ fn statistics() {
 #[test]
 fn serialize() {
     let filename = support::get_test_data("example.gbz");
+    assert!(GBZ::is_gbz(&filename), "File {} is not a GBZ file", filename.to_string_lossy());
     let gbz: GBZ = serialize::load_from(&filename).unwrap();
     serialize::test(&gbz, "gbz", None, true);
 }

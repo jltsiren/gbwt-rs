@@ -30,6 +30,7 @@ use simple_sds::serialize::Serialize;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
 use std::ops::Range;
+use std::path::Path;
 use std::io;
 
 #[cfg(test)]
@@ -61,6 +62,7 @@ mod tests;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.gbz");
+/// assert!(GBZ::is_gbz(&filename));
 /// let gbz: GBZ = serialize::load_from(&filename).unwrap();
 ///
 /// assert_eq!(gbz.nodes(), 12);
@@ -133,6 +135,11 @@ impl GBZ {
     /// Returns a reference to the tags stored in the GBZ container.
     pub fn tags(&self) -> &Tags {
         &self.tags
+    }
+
+    /// Returns `true` if the given file is a GBZ file.
+    pub fn is_gbz<P: AsRef<Path>>(filename: P) -> bool {
+        Header::<GBZPayload>::found_in(filename)
     }
 
     // Converts a node id in the original graph to a sequence id.

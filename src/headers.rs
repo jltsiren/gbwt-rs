@@ -1,6 +1,8 @@
 //! File format headers.
 
-use simple_sds::serialize::Serializable;
+use std::path::Path;
+
+use simple_sds::serialize::{Serialize, Serializable};
 
 //-----------------------------------------------------------------------------
 
@@ -110,6 +112,16 @@ impl<T: Payload> Header<T> {
             }
         }
         Err(format!("{}: Invalid version {} (expected {} to {})", T::NAME, self.version, T::MIN_VERSION, T::VERSION))
+    }
+
+    /// Returns `true` if the given file starts with a header of this type.
+    pub fn found_in<P: AsRef<Path>>(filename: P) -> bool {
+        if let Ok(mut file) = std::fs::File::open(filename) {
+            if let Ok(header) = Self::load(&mut file) {
+                return header.tag == T::TAG;
+            }
+        }
+        false
     }
 
     /// Returns a reference to the payload.
@@ -338,6 +350,8 @@ impl Payload for GBZPayload {
 mod tests {
     use super::*;
 
+    use std::fs;
+
     use simple_sds::serialize;
 
     #[test]
@@ -397,6 +411,18 @@ mod tests {
             panic!("{}", msg);
         }
         serialize::test(&header, "gbz-header", Some(2), true);
+    }
+
+    #[test]
+    fn found_in() {
+        let header = Header::<GBZPayload>::new();
+        let name = "found-in";
+        let filename = serialize::temp_file_name(name);
+        serialize::serialize_to(&header, &filename).unwrap();
+        assert!(Header::<GBZPayload>::found_in(&filename), "The file does not start with a GBZ header");
+        assert!(!Header::<GBWTPayload>::found_in(&filename), "The file starts with a GBWT header");
+        fs::remove_file(&filename).unwrap();
+        assert!(!Header::<GBZPayload>::found_in(&filename), "Deleted file starts with a GBZ header");
     }
 }
 
