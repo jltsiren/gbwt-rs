@@ -279,6 +279,27 @@ fn duplicate_tags() {
     let _ = serialize::test(&tags, "duplicate-tags", None, true);
 }
 
+#[test]
+fn remove_tags() {
+    let mut truth: BTreeMap<&str, &str> = BTreeMap::new();
+    truth.insert("first-key", "first-value");
+    truth.insert("second-key", "second-value");
+    truth.insert("third-key", "third-value");
+    truth.insert("fourth-key", "fourth-value");
+    let missing = vec!["this", "should", "not", "exist"];
+    let mut tags = Tags::new();
+    for (key, value) in truth.iter() {
+        tags.insert(key, value);
+    }
+    truth.remove("second-key");
+    assert_eq!(tags.remove("second-key"), Some(String::from("second-value")), "Failed to remove a tag");
+    for key in missing.iter() {
+        assert_eq!(tags.remove(key), None, "Failed to remove a non-existing tag");
+    }
+    check_tags(&tags, &truth, &missing);
+    let _ = serialize::test(&tags, "remove-tags", None, true);
+}
+
 //-----------------------------------------------------------------------------
 
 // Generate a random value, with the width (almost) geometrically distributed (p = 0.5) in blocks of `w` bits.

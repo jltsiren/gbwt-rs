@@ -12,7 +12,7 @@
 //!
 //! See also the [C++ implementation](https://github.com/jltsiren/gbwtgraph) and the [file format specification](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
 
-use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
+use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE, REF_SAMPLE, REFERENCE_SAMPLES_KEY};
 use crate::{Segment, GBWT, BidirectionalState, Orientation};
 use crate::bwt::Record;
 use crate::gbwt::{SequenceIter, Metadata};
@@ -27,6 +27,7 @@ use simple_sds::ops::{BitVec, Select};
 use simple_sds::raw_vector::{RawVector, AccessRaw};
 use simple_sds::serialize::Serialize;
 
+use std::collections::BTreeSet;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
 use std::ops::Range;
@@ -135,6 +136,106 @@ impl GBZ {
     /// Returns a reference to the tags stored in the GBZ container.
     pub fn tags(&self) -> &Tags {
         &self.tags
+    }
+
+    /// Returns a mutable reference to the tags stored in the GBZ container.
+    pub fn tags_mut(&mut self) -> &mut Tags {
+        &mut self.tags
+    }
+
+    // Internal method that returns a list of potential reference sample names.
+    // Includes the generic sample [`REF_SAMPLE`] if `also_generic` is `true`.
+    fn reference_samples_impl(&self, also_generic: bool) -> Vec<String> {
+        let mut result: Vec<String> = Vec::new();
+        let ref_samples = self.index.tags().get(REFERENCE_SAMPLES_KEY);
+        if let Some(samples) = ref_samples {
+            for sample in samples.split(' ') {
+                result.push(String::from(sample));
+            }
+        }
+        if also_generic {
+            result.push(String::from(REF_SAMPLE));
+        }
+        result
+    }
+
+    /// Returns the list of reference sample identifiers in the metadata.
+    ///
+    /// Reference sample names are set using the [`REFERENCE_SAMPLES_KEY`] tag in the GBWT index.
+    /// If `also_generic` is `true`, the result includes the identifier of the generic sample [`REF_SAMPLE`].
+    /// This does not return the idenfiers for samples that are not present in the metadata.
+    pub fn reference_sample_ids(&self, also_generic: bool) -> Vec<usize> {
+        let metadata = self.metadata();
+        if metadata.is_none() {
+            return Vec::new();
+        }
+        let metadata = metadata.unwrap();
+        self.reference_samples_impl(also_generic).iter().filter_map(|sample| {
+            metadata.sample_id(sample)
+        }).collect()
+    }
+
+    /// Returns the list of reference sample names.
+    ///
+    /// The names are based on the [`REFERENCE_SAMPLES_KEY`] tag in the GBWT index.
+    /// If `also_generic` is `true`, the result includes the generic reference sample [`REF_SAMPLE`].
+    /// This does not return sample names that are not present in the metadata.
+    pub fn reference_sample_names(&self, also_generic: bool) -> Vec<String> {
+        let metadata = self.metadata();
+        if metadata.is_none() {
+            return Vec::new();
+        }
+        let metadata = metadata.unwrap();
+        self.reference_samples_impl(also_generic).into_iter().filter_map(|sample| {
+            if let Some(_) = metadata.sample_id(&sample) {
+                Some(sample)
+            } else {
+                None
+            }
+        }).collect()
+    }
+
+    /// Sets reference samples in the GBWT index, overwriting any existing values.
+    ///
+    /// Returns the number of reference samples that were set.
+    ///
+    /// The reference samples are stored in the GBWT index using the [`REFERENCE_SAMPLES_KEY`] tag.
+    /// This method sets only those sample names that are present in the metadata.
+    /// If the GBWT index does not contain metadata, this method does nothing.
+    /// This will not allow setting the generic sample [`REF_SAMPLE`] as a reference sample.
+    /// If there are no reference samples, the tag is removed from the GBWT index.
+    pub fn set_reference_samples(&mut self, samples: &[String]) -> usize {
+        let metadata = self.metadata();
+        if metadata.is_none() {
+            return 0;
+        }
+        let metadata = metadata.unwrap();
+
+        let mut ref_samples: BTreeSet<String> = BTreeSet::new();
+        for sample in samples {
+            if let Some(_) = metadata.sample_id(sample) {
+                if sample != REF_SAMPLE {
+                    ref_samples.insert(sample.clone());
+                }
+            }
+        }
+
+        let mut value = String::new();
+        let mut count = 0;
+        for sample in ref_samples {
+            if count > 0 {
+                value.push(' ');
+            }
+            value.push_str(&sample);
+            count += 1;
+        }
+        if count > 0 {
+            self.index.tags_mut().insert(REFERENCE_SAMPLES_KEY, &value);
+        } else {
+            self.index.tags_mut().remove(REFERENCE_SAMPLES_KEY);
+        }
+
+        count
     }
 
     /// Returns `true` if the given file is a GBZ file.

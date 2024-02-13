@@ -190,6 +190,11 @@ impl GBWT {
     pub fn tags(&self) -> &Tags {
         &self.tags
     }
+
+    /// Returns a mutable reference to the tags.
+    pub fn tags_mut(&mut self) -> &mut Tags {
+        &mut self.tags
+    }
 }
 
 impl AsRef<BWT> for GBWT {

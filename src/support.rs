@@ -812,6 +812,12 @@ impl Tags {
         let _ = self.tags.insert(key, value.to_string());
     }
 
+    /// Removes a tag with the given key and returns its value, or [`None`] if there is no such tag.
+    pub fn remove(&mut self, key: &str) -> Option<String> {
+        let key = key.to_lowercase();
+        self.tags.remove(&key)
+    }
+
     /// Returns an iterator that visits all tags in sorted order by keys.
     ///
     /// The type of `Item` is `(&`[`String`]`, &`[`String`]`)`.

@@ -170,6 +170,53 @@ fn check_states(gbz: &GBZ) {
 //-----------------------------------------------------------------------------
 
 #[test]
+fn reference_samples() {
+    let filename = support::get_test_data("example.gbz");
+    let mut gbz: GBZ = serialize::load_from(&filename).unwrap();
+
+    // No reference samples in the original graph.
+    assert!(gbz.reference_sample_ids(false).is_empty(), "The graph should not have reference sample ids");
+    assert!(gbz.reference_sample_names(false).is_empty(), "The graph should not have reference sample names");
+    assert_eq!(gbz.reference_sample_ids(true), vec![0], "Invalid reference + generic sample ids (default)");
+    assert_eq!(gbz.reference_sample_names(true), vec![String::from(REF_SAMPLE)], "Invalid reference + generic sample names (default)");
+
+    // Add a reference sample.
+    let ref_samples = vec![String::from("sample")];
+    let ref_and_generic = vec![String::from("sample"), String::from(REF_SAMPLE)];
+    assert_eq!(gbz.set_reference_samples(&ref_samples), 1, "Could not set reference samples (correct)");
+    assert_eq!(gbz.reference_sample_ids(false), vec![1], "Invalid reference sample ids (correct)");
+    assert_eq!(gbz.reference_sample_names(false), ref_samples, "Invalid reference sample names (correct)");
+    assert_eq!(gbz.reference_sample_ids(true), vec![1, 0], "Invalid reference + generic sample ids (correct)");
+    assert_eq!(gbz.reference_sample_names(true), ref_and_generic, "Invalid reference + generic sample names (correct)");
+
+    // Try setting duplicate names.
+    let duplicates = vec![String::from("sample"), String::from("sample")];
+    assert_eq!(gbz.set_reference_samples(&duplicates), 1, "Could not set reference samples (duplicates)");
+    assert_eq!(gbz.reference_sample_ids(false), vec![1], "Invalid reference sample ids (duplicates)");
+    assert_eq!(gbz.reference_sample_names(false), ref_samples, "Invalid reference sample names (duplicates)");
+    assert_eq!(gbz.reference_sample_ids(true), vec![1, 0], "Invalid reference + generic sample ids (duplicates)");
+    assert_eq!(gbz.reference_sample_names(true), ref_and_generic, "Invalid reference + generic sample names (duplicates)");
+
+    // Try nonexistent names.
+    let nonexistent = vec![String::from("nonexistent")];
+    let generic_only = vec![String::from(REF_SAMPLE)];
+    assert_eq!(gbz.set_reference_samples(&nonexistent), 0, "Could not set reference samples (nonexistent)");
+    assert_eq!(gbz.reference_sample_ids(false), Vec::new(), "Invalid reference sample ids (nonexistent)");
+    assert_eq!(gbz.reference_sample_names(false), Vec::<String>::new(), "Invalid reference sample names (nonexistent)");
+    assert_eq!(gbz.reference_sample_ids(true), vec![0], "Invalid reference + generic sample ids (nonexistent)");
+    assert_eq!(gbz.reference_sample_names(true), generic_only, "Invalid reference + generic sample names (nonexistent)");
+
+    // Try setting the generic sample as a reference sample.
+    assert_eq!(gbz.set_reference_samples(&generic_only), 0, "Could not set reference samples (generic)");
+    assert_eq!(gbz.reference_sample_ids(false), Vec::new(), "Invalid reference sample ids (generic)");
+    assert_eq!(gbz.reference_sample_names(false), Vec::<String>::new(), "Invalid reference sample names (generic)");
+    assert_eq!(gbz.reference_sample_ids(true), vec![0], "Invalid reference + generic sample ids (generic)");
+    assert_eq!(gbz.reference_sample_names(true), generic_only, "Invalid reference + generic sample names (generic)");
+}
+
+//-----------------------------------------------------------------------------
+
+#[test]
 fn statistics() {
     let filename = support::get_test_data("example.gbz");
     let gbz: GBZ = serialize::load_from(&filename).unwrap();
