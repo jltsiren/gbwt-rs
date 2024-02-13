@@ -604,3 +604,71 @@ fn path_names() {
 }
 
 //-----------------------------------------------------------------------------
+
+fn check_path_name(path_name: &FullPathName, sample: &str, contig: &str, haplotype: usize, fragment: usize, len: usize) {
+    assert_eq!(path_name.sample, sample, "Wrong sample name");
+    assert_eq!(path_name.contig, contig, "Wrong contig name");
+    assert_eq!(path_name.haplotype, haplotype, "Wrong haplotype number");
+    assert_eq!(path_name.fragment, fragment, "Wrong fragment number");
+
+    let pan_sn_name = format!("{}#{}#{}", sample, haplotype, contig);
+    assert_eq!(path_name.pan_sn_name(), pan_sn_name, "Wrong PanSN name");
+
+    let path_fragment_name = format!("{}#{}#{}[{}-{}]", sample, haplotype, contig, fragment, len);
+    assert_eq!(path_name.path_fragment_name(len), path_fragment_name, "Wrong path fragment name");
+}
+
+#[test]
+fn full_path_name_from_metadata() {
+    let filename = support::get_test_data("example.meta");
+    let metadata: Metadata = serialize::load_from(&filename).unwrap();
+
+    for (path_id, path_name) in metadata.path_iter().enumerate() {
+        let from_metadata = FullPathName::from_metadata(&metadata, path_id);
+        assert!(from_metadata.is_some(), "Failed to create FullPathName from metadata for path {}", path_id);
+        let from_metadata = from_metadata.unwrap();
+        let truth = FullPathName {
+            sample: metadata.sample_name(path_name.sample()),
+            contig: metadata.contig_name(path_name.contig()),
+            haplotype: path_name.phase(),
+            fragment: path_name.fragment()
+        };
+        assert_eq!(from_metadata, truth, "Wrong FullPathName from metadata for path {}", path_id);
+    }
+}
+
+#[test]
+fn full_path_name_generic() {
+    let name = "example";
+    let path_name = FullPathName::generic("example");
+
+    let string_name = name;
+    assert_eq!(&path_name.to_string(), string_name, "Wrong string representation");
+    check_path_name(&path_name, REF_SAMPLE, name, 0, 0, 123);
+}
+
+#[test]
+fn full_path_name_reference() {
+    let sample = "GRCh38";
+    let contig = "chr1";
+    let path_name = FullPathName::reference(sample, contig);
+
+    let string_name = format!("{}#{}", sample, contig);
+    assert_eq!(path_name.to_string(), string_name, "Wrong string representation");
+    check_path_name(&path_name, sample, contig, 0, 0, 123);
+}
+
+#[test]
+fn full_path_name_haplotype() {
+    let sample = "NA12878";
+    let contig = "chr1";
+    let haplotype = 1;
+    let fragment = 38000;
+    let path_name = FullPathName::haplotype(sample, contig, haplotype, fragment);
+
+    let string_name = format!("{}#{}#{}@{}", sample, haplotype, contig, fragment);
+    assert_eq!(path_name.to_string(), string_name, "Wrong string representation");
+    check_path_name(&path_name, sample, contig, haplotype, fragment, 4800);
+}
+
+//-----------------------------------------------------------------------------

@@ -9,7 +9,7 @@
 //! At the moment, this implementation only supports GBWT indexes built with other tools.
 //! See also the original [C++ implementation](https://github.com/jltsiren/gbwt).
 
-use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
+use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE, REF_SAMPLE};
 use crate::{Orientation, Pos};
 use crate::bwt::{BWT, Record};
 use crate::headers::{Header, GBWTPayload, MetadataPayload};
@@ -22,7 +22,7 @@ use simple_sds::serialize;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
 use std::ops::Range;
-use std::{io, slice};
+use std::{fmt, io, slice};
 
 #[cfg(test)]
 mod tests;
@@ -816,7 +816,7 @@ impl Serialize for Metadata {
 
 //-----------------------------------------------------------------------------
 
-/// A structured path name.
+/// A structured path name relative to [`Metadata`].
 ///
 /// Each path name in the same metadata structure must be unique.
 /// A path name has four components: sample, contig, phase (haplotype), and fragment (count).
@@ -826,6 +826,8 @@ impl Serialize for Metadata {
 /// * Each (sample, phase) combination corresponds to a haplotype in the metadata.
 /// * Fragment field can be used as a fragment index for fragments from the sequence identified by (sample, contig, phase).
 ///   It can also be used as the starting offset of the fragment in the corresponding sequence.
+///
+/// See also [`FullPathName`] for a stand-alone structure that contains the same information.
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq)]
 pub struct PathName {
@@ -880,5 +882,106 @@ impl PathName {
 }
 
 impl Serializable for PathName {}
+
+//-----------------------------------------------------------------------------
+
+/// A structured path name as a stand-alone structure.
+///
+/// This structure stores the same information as [`PathName`]:
+///
+/// * Sample name.
+/// * Contig name.
+/// * Haplotype/phase number.
+/// * Fragment number or starting offset of the fragment.
+///
+/// The path can be a generic path, a reference path, or a haplotype path in a similar way to vg path senses.
+///
+/// * Generic paths have [`REF_SAMPLE`] as their sample name, and their actual name is stored as contig name.
+/// * Reference paths have `0` both as the haplotype and the fragment, and their names are of the form `sample#contig`.
+/// * Haplotype paths start their haplotype numbers from `1`, and their names are of the form `sample#haplotype#contig@fragment`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FullPathName {
+    /// Sample name.
+    pub sample: String,
+
+    /// Contig name.
+    pub contig: String,
+
+    /// Haplotype/phase number.
+    pub haplotype: usize,
+
+    /// Fragment number or starting offset of the fragment.
+    pub fragment: usize,
+}
+
+impl FullPathName {
+    /// Returns the name of the path with the given identifier in GBWT metadata, or [`None`] if the path does not exist.
+    pub fn from_metadata(metadata: &Metadata, path_id: usize) -> Option<Self> {
+        let name = metadata.path(path_id)?;
+        let sample = metadata.sample_name(name.sample());
+        let contig = metadata.contig_name(name.contig());
+        Some(FullPathName {
+            sample, contig,
+            haplotype: name.phase(),
+            fragment: name.fragment(),
+        })
+    }
+
+    /// Returns a new generic path name.
+    pub fn generic(name: &str) -> Self {
+        FullPathName {
+            sample: String::from(REF_SAMPLE),
+            contig: String::from(name),
+            haplotype: 0,
+            fragment: 0,
+        }
+    }
+
+    /// Returns a new reference path name.
+    pub fn reference(sample: &str, contig: &str) -> Self {
+        FullPathName {
+            sample: String::from(sample),
+            contig: String::from(contig),
+            haplotype: 0,
+            fragment: 0,
+        }
+    }
+
+    /// Returns a new haplotype path name.
+    pub fn haplotype(sample: &str, contig: &str, haplotype: usize, fragment: usize) -> Self {
+        FullPathName {
+            sample: String::from(sample),
+            contig: String::from(contig),
+            haplotype,
+            fragment,
+        }
+    }
+
+    /// Returns a PanSN representation of the path name.
+    ///
+    /// The fragment field is assumed to be `0`.
+    pub fn pan_sn_name(&self) -> String {
+        format!("{}#{}#{}", self.sample, self.haplotype, self.contig)
+    }
+
+    /// Returns a path fragment name compatible with vg.
+    ///
+    /// The name is of the form `sample#haplotype#contig[fragment-end]`.
+    pub fn path_fragment_name(&self, end: usize) -> String {
+        format!("{}#{}#{}[{}-{}]", self.sample, self.haplotype, self.contig, self.fragment, end)
+    }
+}
+
+impl fmt::Display for FullPathName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.sample == REF_SAMPLE {
+            write!(f, "{}", self.contig)
+        } else if self.haplotype == 0 && self.fragment == 0 {
+            write!(f, "{}#{}", self.sample, self.contig)
+        } else {
+            write!(f, "{}#{}#{}@{}", self.sample, self.haplotype, self.contig, self.fragment)
+        }
+    }
+}
 
 //-----------------------------------------------------------------------------

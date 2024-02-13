@@ -2,6 +2,10 @@
 
 ## Current version
 
+* New functionality:
+  * `GBZ::reference_positions` for finding positions on reference paths for indexing by sequence offsets.
+  * GBZ methods for setting and iterating over reference samples.
+
 ## GBWT-rs 0.3.0 (2024-01-29)
 
 * `gbunzip`:

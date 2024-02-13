@@ -361,6 +361,11 @@ impl<'a> Record<'a> {
         Record { id, edges, bwt }
     }
 
+    /// Decomposes the record into raw parts.
+    pub fn into_raw_parts(self) -> (usize, Vec<Pos>, &'a [u8]) {
+        (self.id, self.edges, self.bwt)
+    }
+
     /// Decompresses the adjacency list from a byte slice.
     ///
     /// Returns the list of edges and the slice offset after the adjacency
