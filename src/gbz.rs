@@ -13,7 +13,7 @@
 //! See also the [C++ implementation](https://github.com/jltsiren/gbwtgraph) and the [file format specification](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
 
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE, REF_SAMPLE, REFERENCE_SAMPLES_KEY};
-use crate::{Segment, GBWT, BidirectionalState, Orientation};
+use crate::{Segment, GBWT, BidirectionalState, Orientation, Pos};
 use crate::bwt::Record;
 use crate::gbwt::{SequenceIter, Metadata};
 use crate::graph::Graph;
@@ -611,6 +611,64 @@ impl GBZ {
         }
 
         sets.extract(|node_id| self.has_node(node_id))
+    }
+
+    /// Extracts reference path positions for indexing.
+    ///
+    /// This indexes all reference and generic paths in the graph.
+    /// The positions are indexed approximately every `interval` base pairs at the start of a node.
+    /// The return value contains a tuple for each indexed path.
+    /// The first component is the path handle (its identifier in ther graph).
+    /// The second component lists the indexed sequence positions and the corresponding GBWT positions.
+    pub fn reference_positions(&self, interval: usize, verbose: bool) -> Vec<(usize, Vec<(usize, Pos)>)> {
+        if verbose {
+            eprintln!("Extracting reference path positions");
+        }
+
+        // Determine reference samples.
+        let metadata = self.metadata().unwrap();
+        let ref_samples: BTreeSet<usize> = self.reference_sample_ids(true).into_iter().collect();
+        if ref_samples.is_empty() {
+            eprintln!("No reference samples to index");
+            return Vec::new();
+        }
+        if verbose {
+            eprint!("Reference samples:");
+            for id in ref_samples.iter() {
+                eprint!(" {}", metadata.sample_name(*id));
+            }
+            eprintln!();
+        }
+
+        // Determine and index reference paths.
+        let mut indexed_paths: usize = 0;
+        let mut indexed_positions: usize = 0;
+        let mut result = Vec::new();
+        for (path_handle, name) in metadata.path_iter().enumerate() {
+            if ref_samples.contains(&name.sample()) {
+                let mut indexed_positions_for_path = Vec::new();
+                let mut path_offset = 0;
+                let mut next = 0;
+                let sequence_id = support::encode_path(path_handle, Orientation::Forward);
+                let mut pos = self.index.start(sequence_id);
+                while let Some(p) = pos {
+                    if path_offset >= next {
+                        indexed_positions_for_path.push((path_offset, p));
+                        indexed_positions += 1;
+                        next = path_offset + interval;
+                    }
+                    path_offset += self.sequence_len(support::node_id(p.node)).unwrap();
+                    pos = self.index.forward(p);
+                }
+                result.push((path_handle, indexed_positions_for_path));
+                indexed_paths += 1;
+            }
+        }
+
+        if verbose {
+            eprintln!("Found {} positions on {} reference paths", indexed_positions, indexed_paths);
+        }
+        result
     }
 }
 
