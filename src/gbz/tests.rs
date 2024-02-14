@@ -526,20 +526,20 @@ fn reference_positions() {
     let ref_samples: BTreeSet<usize> = graph.reference_sample_ids(true).into_iter().collect();
 
     // For each reference path, collect the starting positions of all nodes.
-    let mut node_starts: Vec<(usize, Vec<(usize, Pos)>)> = Vec::new();
-    for (path_id, path_name) in metadata.path_iter().enumerate() {
-        if !ref_samples.contains(&path_name.sample()) {
+    let mut node_starts: Vec<ReferencePath> = Vec::new();
+    for (id, name) in metadata.path_iter().enumerate() {
+        if !ref_samples.contains(&name.sample()) {
             continue;
         }
         let mut path_offset = 0;
-        let mut curr = index.start(support::encode_path(path_id, Orientation::Forward));
+        let mut curr = index.start(support::encode_path(id, Orientation::Forward));
         let mut positions: Vec<(usize, Pos)> = Vec::new();
         while let Some(p) = curr {
             positions.push((path_offset, p));
             path_offset += graph.sequence_len(support::node_id(p.node)).unwrap();
             curr = index.forward(p);
         }
-        node_starts.push((path_id, positions));
+        node_starts.push(ReferencePath { id, len: path_offset, positions});
     }
 
     // Check the indexed positions with various intervals.
@@ -547,20 +547,21 @@ fn reference_positions() {
         let paths = graph.reference_positions(interval, false);
         assert_eq!(paths.len(), node_starts.len(), "Wrong number of reference positions for interval {}", interval);
         for i in 0..paths.len() {
-            assert_eq!(paths[i].0, node_starts[i].0, "Wrong path id at offset {} with interval {}", i, interval);
+            assert_eq!(paths[i].id, node_starts[i].id, "Wrong path id at offset {} with interval {}", i, interval);
+            assert_eq!(paths[i].len, node_starts[i].len, "Wrong path length at offset {} with interval {}", i, interval);
             let mut next = 0;
-            let mut iter = paths[i].1.iter();
-            for (offset, pos) in node_starts[i].1.iter() {
+            let mut iter = paths[i].positions.iter();
+            for (offset, pos) in node_starts[i].positions.iter() {
                 if *offset >= next {
                     let indexed = iter.next();
-                    assert!(indexed.is_some(), "Missing indexed position for path {} with interval {}", paths[i].0, interval);
+                    assert!(indexed.is_some(), "Missing indexed position for path {} with interval {}", paths[i].id, interval);
                     let indexed = indexed.unwrap();
-                    assert_eq!(indexed.0, *offset, "Wrong indexed offset for path {} with interval {}", paths[i].0, interval);
-                    assert_eq!(indexed.1, *pos, "Wrong indexed GBWT position for path {} with interval {}", paths[i].0, interval);
+                    assert_eq!(indexed.0, *offset, "Wrong indexed offset for path {} with interval {}", paths[i].id, interval);
+                    assert_eq!(indexed.1, *pos, "Wrong indexed GBWT position for path {} with interval {}", paths[i].id, interval);
                     next = offset + interval;
                 }
             }
-            assert!(iter.next().is_none(), "Too many indexed positions for path {} with interval {}", paths[i].0, interval);
+            assert!(iter.next().is_none(), "Too many indexed positions for path {} with interval {}", paths[i].id, interval);
         }
     }
 }

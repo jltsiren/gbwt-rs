@@ -615,10 +615,7 @@ impl GBZ {
     ///
     /// This indexes all reference and generic paths in the graph.
     /// The positions are indexed approximately every `interval` base pairs at the start of a node.
-    /// The return value contains a tuple for each indexed path.
-    /// The first component is the path handle (its identifier in ther graph).
-    /// The second component lists the indexed sequence positions and the corresponding GBWT positions.
-    pub fn reference_positions(&self, interval: usize, verbose: bool) -> Vec<(usize, Vec<(usize, Pos)>)> {
+    pub fn reference_positions(&self, interval: usize, verbose: bool) -> Vec<ReferencePath> {
         if verbose {
             eprintln!("Extracting reference path positions");
         }
@@ -658,7 +655,11 @@ impl GBZ {
                     path_offset += self.sequence_len(support::node_id(p.node)).unwrap();
                     pos = self.index.forward(p);
                 }
-                result.push((path_handle, indexed_positions_for_path));
+                result.push(ReferencePath {
+                    id: path_handle,
+                    len: path_offset,
+                    positions: indexed_positions_for_path
+                });
                 indexed_paths += 1;
             }
         }
@@ -1246,5 +1247,20 @@ impl<'a> DoubleEndedIterator for StateIter<'a> {
 }
 
 impl<'a> FusedIterator for StateIter<'a> {}
+
+//-----------------------------------------------------------------------------
+
+/// Information about a reference path or a generic path.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReferencePath {
+    /// Path identifier in the original graph.
+    pub id: usize,
+
+    /// Length of the corresponding sequence (in bp).
+    pub len: usize,
+
+    /// A sorted list of sequence positions at the start of a node and the corresponding GBWT positions.
+    pub positions: Vec<(usize, Pos)>,
+}
 
 //-----------------------------------------------------------------------------
