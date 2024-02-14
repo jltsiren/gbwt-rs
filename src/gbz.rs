@@ -187,7 +187,7 @@ impl GBZ {
         }
         let metadata = metadata.unwrap();
         self.reference_samples_impl(also_generic).into_iter().filter_map(|sample| {
-            if let Some(_) = metadata.sample_id(&sample) {
+            if metadata.sample_id(&sample).is_some() {
                 Some(sample)
             } else {
                 None
@@ -213,10 +213,8 @@ impl GBZ {
 
         let mut ref_samples: BTreeSet<String> = BTreeSet::new();
         for sample in samples {
-            if let Some(_) = metadata.sample_id(sample) {
-                if sample != REF_SAMPLE {
-                    ref_samples.insert(sample.clone());
-                }
+            if metadata.sample_id(sample).is_some() && sample != REF_SAMPLE {
+                ref_samples.insert(sample.clone());
             }
         }
 
