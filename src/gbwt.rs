@@ -584,7 +584,7 @@ impl<'a> FusedIterator for SequenceIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::{Metadata};
+/// use gbwt::{Metadata, FullPathName};
 /// use gbwt::support;
 /// use simple_sds::serialize;
 ///
@@ -611,6 +611,11 @@ impl<'a> FusedIterator for SequenceIter<'a> {}
 ///     }
 /// }
 /// assert_eq!(paths, vec![1, 4, 5]);
+///
+/// // Find a path identifier by metadata.
+/// let path_name = FullPathName::haplotype("sample", "A", 2, 0);
+/// let path_id = metadata.find_path(&path_name);
+/// assert_eq!(path_id, Some(3));
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Metadata {
@@ -644,6 +649,26 @@ impl Metadata {
         } else {
             None
         }
+    }
+
+    /// Returns the identifier of the path with the given name, or [`None`] if there is no such name.
+    pub fn find_path(&self, name: &FullPathName) -> Option<usize> {
+        if !self.has_path_names() || !self.has_sample_names() || !self.has_contig_names() {
+            return None;
+        }
+        let path_name = PathName::from_fields(
+            self.sample_id(&name.sample)?,
+            self.contig_id(&name.contig)?,
+            name.haplotype,
+            name.fragment,
+        );
+
+        for (i, path) in self.path_names.iter().enumerate() {
+            if *path == path_name {
+                return Some(i);
+            }
+        }
+        None
     }
 
     /// Returns the name of the path with the given identifier in the [PanSN format](https://github.com/pangenome/PanSN-spec), or [`None`] if there is no such name.

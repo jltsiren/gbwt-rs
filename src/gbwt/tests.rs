@@ -634,6 +634,10 @@ fn full_path_name_from_metadata() {
             fragment: path_name.fragment()
         };
         assert_eq!(from_metadata, truth, "Wrong FullPathName from metadata for path {}", path_id);
+
+        // And now in the other direction.
+        let found_id = metadata.find_path(&from_metadata);
+        assert_eq!(found_id, Some(path_id), "Failed to find path id for FullPathName from metadata for path {}", path_id);
     }
 }
 
