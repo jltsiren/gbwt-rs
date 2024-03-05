@@ -12,16 +12,16 @@ pub fn readable_size(bytes: usize) -> (f64, &'static str) {
     ];
 
     let value = bytes as f64;
-    let mut unit = 0;
-    for i in 1..units.len() {
-        if value >= units[i].0 {
-            unit = i;
+    let mut unit = units[0];
+    for next in units.iter().skip(1) {
+        if value >= next.0 {
+            unit = *next;
         } else {
             break;
         }
     }
 
-    (value / units[unit].0, units[unit].1)
+    (value / unit.0, unit.1)
 }
 
 #[cfg(target_os = "linux")]
@@ -61,7 +61,7 @@ pub fn report_results(queries: usize, total_len: usize, total_occs: usize, durat
     let occs = (total_occs as f64) / (queries as f64);
     eprintln!("Time:        {:.3} seconds ({:.3} us/query, {:.1} ns/node)", duration.as_secs_f64(), us, ns);
     eprintln!("Occurrences: {} total ({:.3} per query)", total_occs, occs);
-    eprintln!("");
+    eprintln!();
 }
 
 pub fn report_memory_usage() {

@@ -1,3 +1,8 @@
+#![allow(
+    clippy::uninlined_format_args,
+    clippy::new_without_default
+)]
+
 use gbwt::{GBWT, GBZ, Orientation};
 use gbwt::{REF_SAMPLE, REFERENCE_SAMPLES_KEY};
 use gbwt::internal;
@@ -37,20 +42,20 @@ fn main() -> Result<(), String> {
     if config.verbose {
         let (size, units) = internal::readable_size(gbz.size_in_bytes());
         eprintln!("GBZ size: {:.3} {}", size, units);
-        eprintln!("");
+        eprintln!();
     }
 
     if !config.benchmark {
         write_gfa(&gbz, &config).map_err(|x| x.to_string())?;
         if config.verbose {
-            eprintln!("");
+            eprintln!();
         }
     }
 
     if config.verbose {
         eprintln!("GFA decompressed in {:.3} seconds", start.elapsed().as_secs_f64());
         internal::report_memory_usage();
-        eprintln!("");
+        eprintln!();
     }
     Ok(())
 }
@@ -124,7 +129,7 @@ impl Config {
                     config.buffer_size = n * 1048576;
                 },
                 Err(f) => {
-                    return Err(format!("--buffer-size: {}", f.to_string()));
+                    return Err(format!("--buffer-size: {}", f));
                 },
             }
         }
@@ -154,7 +159,7 @@ impl Config {
                     config.threads = n;
                 },
                 Err(f) => {
-                    return Err(format!("--threads: {}", f.to_string()));
+                    return Err(format!("--threads: {}", f));
                 },
             }
         }
@@ -478,7 +483,7 @@ fn path_to_p_line(gbz: &GBZ, path_id: usize) -> Vec<u8> {
     let metadata = gbz.metadata().unwrap();
     let path_name = metadata.path(path_id).unwrap();
     let contig_name = metadata.contig(path_name.contig()).unwrap();
-    write_p_line(gbz, path_id, &contig_name)
+    write_p_line(gbz, path_id, contig_name)
 }
 
 fn path_to_pan_sn(gbz: &GBZ, path_id: usize) -> Vec<u8> {

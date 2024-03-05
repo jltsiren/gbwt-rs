@@ -30,6 +30,8 @@
 //! * This implementation supports the Simple-SDS file formats for [GBWT](https://github.com/jltsiren/gbwt/blob/master/SERIALIZATION.md) and [GBZ](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
 //! * GBWT / GBZ files written by this library can be identified by `source` tag value `jltsiren/gbwt-rs`.
 
+#![allow(clippy::uninlined_format_args)]
+
 pub mod bwt;
 pub mod gbwt;
 pub mod gbz;

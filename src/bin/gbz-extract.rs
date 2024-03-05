@@ -1,3 +1,8 @@
+#![allow(
+    clippy::uninlined_format_args,
+    clippy::new_without_default
+)]
+
 use gbwt::{GBZ, Orientation, Metadata};
 use gbwt::{internal, support};
 
@@ -42,7 +47,7 @@ fn main() -> Result<(), String> {
     if config.verbose {
         eprintln!("Finished in {:.3} seconds", start.elapsed().as_secs_f64());
         internal::report_memory_usage();
-        eprintln!("");
+        eprintln!();
     }
     Ok(())
 }
@@ -127,14 +132,14 @@ impl Config {
                     config.threads = n;
                 },
                 Err(f) => {
-                    return Err(format!("--threads: {}", f.to_string()));
+                    return Err(format!("--threads: {}", f));
                 },
             }
         }
         if let Some(s) = matches.opt_str("endmarker-value") {
             match s.parse::<u8>() {
                 Ok(n) => config.endmarker = n,
-                Err(f) => return Err(format!("--endmarker-value: {}", f.to_string())),
+                Err(f) => return Err(format!("--endmarker-value: {}", f)),
             }
         }
         if let Some(s) = matches.opt_str("endmarker-char") {
@@ -229,8 +234,8 @@ fn select_paths(gbz: &GBZ, metadata: &Metadata, config: &Config) -> Result<Vec<u
 
     // Determine the components containing the initial paths.
     let mut node_to_component: HashMap<usize, usize> = HashMap::with_capacity(gbz.nodes());
-    for component_id in 0..components.len() {
-        for &node_id in components[component_id].iter() {
+    for (component_id, component) in components.iter().enumerate() {
+        for &node_id in component.iter() {
             node_to_component.insert(node_id, component_id);
         }
     }
@@ -276,7 +281,7 @@ fn extract_sequences(gbz: &GBZ, config: &Config) -> Result<(), String> {
     let name_name = format!("{}.names", config.output.as_ref().unwrap());
     let mut name_file = options.open(name_name).map_err(|e| e.to_string())?;
     for path_id in selected_paths {
-        let sequence = extract_sequence(&gbz, path_id, Orientation::Forward, &config);
+        let sequence = extract_sequence(gbz, path_id, Orientation::Forward, config);
         seq_file.write_all(&sequence).map_err(|e| e.to_string())?;
         let path_name = path_name_as_line(metadata, path_id, sequence.len() - 1);
         name_file.write_all(path_name.as_bytes()).map_err(|e| e.to_string())?;
@@ -344,7 +349,7 @@ fn encode_start(node_id: usize, orientation: Orientation) -> u64 {
         Orientation::Forward => 0,
         Orientation::Reverse => 1 << 10,
     };
-    (node_id as u64) << 11 + o_bit
+    ((node_id as u64) << 11) | o_bit
 }
 
 fn extract_path(gbz: &GBZ, path_id: usize, orientation: Orientation) -> Vec<u64> {
@@ -381,7 +386,7 @@ fn count_bwt_runs(expected_len: usize, config: &Config) -> Result<(), String> {
     while offset < expected_len {
         let len = cmp::min(expected_len - offset, Config::BUFFER_SIZE);
         unsafe {
-            let buf: &mut [u8] = slice::from_raw_parts_mut(buffer.as_mut_ptr() as *mut u8, len);
+            let buf: &mut [u8] = slice::from_raw_parts_mut(buffer.as_mut_ptr(), len);
             file.read_exact(buf).map_err(|e| e.to_string())?;
             buffer.set_len(len);
         }

@@ -1,3 +1,8 @@
+#![allow(
+    clippy::uninlined_format_args,
+    clippy::new_without_default
+)]
+
 use gbwt::{GBWT, Pos};
 use gbwt::internal;
 
@@ -24,13 +29,13 @@ fn main() {
         eprintln!("Cannot perform benchmarks with an empty index");
         process::exit(1);
     }
-    eprintln!("");
+    eprintln!();
 
     let queries = generate_queries(&index, &config);
     unidirectional_search(&index, &queries);
 
     internal::report_memory_usage();
-    eprintln!("");
+    eprintln!();
 }
 
 //-----------------------------------------------------------------------------
@@ -56,7 +61,7 @@ impl Config {
         let matches = match opts.parse(&args[1..]) {
             Ok(m) => m,
             Err(f) => {
-                eprintln!("{}", f.to_string());
+                eprintln!("{}", f);
                 process::exit(1);
             }
         };
@@ -81,7 +86,7 @@ impl Config {
                     config.queries = n;
                 },
                 Err(f) => {
-                    eprintln!("--queries: {}", f.to_string());
+                    eprintln!("--queries: {}", f);
                     process::exit(1);
                 },
             }
@@ -96,7 +101,7 @@ impl Config {
                     config.query_len = n;
                 },
                 Err(f) => {
-                    eprintln!("--query-len: {}", f.to_string());
+                    eprintln!("--query-len: {}", f);
                     process::exit(1);
                 },
             }
@@ -123,8 +128,7 @@ fn generate_queries(index: &GBWT, config: &Config) -> Vec<Vec<usize>> {
 
     while queries.len() < config.queries {
         let mut query: Vec<usize> = Vec::new();
-        let mut curr = Pos::default();
-        curr.node = rng.gen_range(index.first_node()..index.alphabet_size());
+        let mut curr = Pos::new(rng.gen_range(index.first_node()..index.alphabet_size()), 0);
         if let Some(state) = index.find(curr.node) {
             curr.offset = rng.gen_range(0..state.len());
         } else {
@@ -144,7 +148,7 @@ fn generate_queries(index: &GBWT, config: &Config) -> Vec<Vec<usize>> {
         }
     }
 
-    println!("");
+    println!();
     queries
 }
 
@@ -155,8 +159,8 @@ fn unidirectional_search(index: &GBWT, queries: &[Vec<usize>]) {
     let mut total_occs = 0;
     for query in queries {
         let mut state = index.find(query[0]).unwrap();
-        for i in 1..query.len() {
-            state = index.extend(&state, query[i]).unwrap();
+        for node in query.iter().skip(1) {
+            state = index.extend(&state, *node).unwrap();
         }
         total_len += query.len();
         total_occs += state.len();
