@@ -22,7 +22,7 @@ use simple_sds::serialize;
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
 use std::ops::Range;
-use std::{fmt, io, slice};
+use std::{fmt, io, slice, usize};
 
 #[cfg(test)]
 mod tests;
@@ -669,6 +669,36 @@ impl Metadata {
             }
         }
         None
+    }
+
+    // TODO: We need a graph with fragmented haplotypes for testing this.
+    /// Returns the identifier of the last haplotype fragment starting at or before the specified position.
+    ///
+    /// The fragment field is used for specifying an offset on the haplotype.
+    /// The other fields are used for identifying the haplotype.
+    /// Returns [`None`] if there is no such path.
+    pub fn find_fragment(&self, name: &FullPathName) -> Option<usize> {
+        if !self.has_path_names() || !self.has_sample_names() || !self.has_contig_names() {
+            return None;
+        }
+        let path_name = PathName::from_fields(
+            self.sample_id(&name.sample)?,
+            self.contig_id(&name.contig)?,
+            name.haplotype,
+            name.fragment,
+        );
+
+        let mut prev_fragment = 0;
+        let mut result: Option<usize> = None;
+        for (i, path) in self.path_names.iter().enumerate() {
+            if path.sample == path_name.sample && path.contig == path_name.contig && path.phase == path_name.phase && path.fragment <= path_name.fragment {
+                if result.is_none() || (result.is_some() && path.fragment > prev_fragment) {
+                    prev_fragment = path.fragment;
+                    result = Some(i);
+                }
+            }
+        }
+        result
     }
 
     /// Returns the name of the path with the given identifier in the [PanSN format](https://github.com/pangenome/PanSN-spec), or [`None`] if there is no such name.
