@@ -4,19 +4,17 @@ use crate::{GBZ, support};
 
 use std::cmp;
 
-/*
 #[cfg(test)]
 mod tests;
-*/
 
 //-----------------------------------------------------------------------------
 
 // FIXME replace with the O(nd) algorithm
-// FIXME tests
 /// Returns the longest common subsequence of integer sequences `a` and `b`, weighted by the given function.
 ///
+/// The subsequence is returned as pairs of positions, and the second return value is the total weight of the LCS.
 /// See [`lcs`] for an unweighted version and [`path_lcs`] for finding the LCS of two paths in a graph.
-pub fn weighted_lcs<F: Fn(usize) -> usize>(a: &[usize], b: &[usize], weight: F) -> (Vec<usize>, usize) {
+pub fn weighted_lcs<F: Fn(usize) -> usize>(a: &[usize], b: &[usize], weight: F) -> (Vec<(usize, usize)>, usize) {
     let mut dp = vec![vec![0; b.len() + 1]; a.len() + 1];
     for i in 0..a.len() {
         for j in 0..b.len() {
@@ -32,7 +30,7 @@ pub fn weighted_lcs<F: Fn(usize) -> usize>(a: &[usize], b: &[usize], weight: F) 
     let mut j = b.len();
     while i > 0 && j > 0 {
         if a[i - 1] == b[j - 1] {
-            result.push(a[i - 1]);
+            result.push((i - 1, j - 1));
             i -= 1;
             j -= 1;
         } else if dp[i][j] == dp[i - 1][j] {
@@ -45,8 +43,9 @@ pub fn weighted_lcs<F: Fn(usize) -> usize>(a: &[usize], b: &[usize], weight: F) 
     (result, dp[a.len()][b.len()])
 }
 
-// FIXME tests
 /// Returns the longest common subsequence of `a` and `b`.
+///
+/// The return value consists of pairs of positions in the input vectors.
 ///
 /// # Examples
 ///
@@ -55,18 +54,19 @@ pub fn weighted_lcs<F: Fn(usize) -> usize>(a: &[usize], b: &[usize], weight: F) 
 ///
 /// let a = vec![1, 2, 3, 4, 5];
 /// let b = vec![2, 4, 6, 8, 10];
-/// assert_eq!(lcs(&a, &b), vec![2, 4]);
+/// let truth = vec![(1, 0), (3, 1)];
+/// assert_eq!(lcs(&a, &b), truth);
 /// ``````
-pub fn lcs(a: &[usize], b: &[usize]) -> Vec<usize> {
+pub fn lcs(a: &[usize], b: &[usize]) -> Vec<(usize, usize)> {
     weighted_lcs(a, b, |_| 1).0
 }
 
-// FIXME tests
 /// Returns the longest common subsequence of paths `a` and `b` in the graph.
 ///
-/// The LCS is weighted by the length of the node, and the second return value is the total weight of the LCS.
-/// The paths are assumed to be valid in the graph.
+/// The LCS is weighted by the length of the node and returned as a vector of pairs of positions.
+/// The second return value is the total weight of the LCS.
 /// If a node is not found in the graph, its length is assumed to be zero.
+/// In such cases, the LCS may not be meaningful.
 ///
 /// # Examples
 ///
@@ -92,17 +92,13 @@ pub fn lcs(a: &[usize], b: &[usize]) -> Vec<usize> {
 /// let b = get_path(&gbz, 2);
 ///
 /// let truth = vec![
-///     support::encode_node(1, Orientation::Forward),
-///     support::encode_node(2, Orientation::Forward),
-///     support::encode_node(5, Orientation::Forward),
-///     support::encode_node(6, Orientation::Forward),
-///     support::encode_node(11, Orientation::Forward),
+///     (0, 0), (1, 1), (3, 3), (4, 4), (6, 6)
 /// ];
 /// let len = 8;
 ///
 /// assert_eq!(algorithms::path_lcs(&a, &b, &gbz), (truth, len));
 /// ```
-pub fn path_lcs(a: &[usize], b: &[usize], graph: &GBZ) -> (Vec<usize>, usize) {
+pub fn path_lcs(a: &[usize], b: &[usize], graph: &GBZ) -> (Vec<(usize, usize)>, usize) {
     let weight = |handle| graph.sequence_len(support::node_id(handle)).unwrap_or(0);
     weighted_lcs(a, b, weight)
 }
