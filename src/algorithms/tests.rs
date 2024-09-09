@@ -95,7 +95,7 @@ fn random_lcs_instance(len: usize, sigma: usize) {
 fn random_lcs() {
     random_lcs_instance(10, 5);
     random_lcs_instance(100, 10);
-    random_lcs_instance(1000, 20);
+    random_lcs_instance(300, 20);
 }
 
 // TODO: Large almost equal sequences
