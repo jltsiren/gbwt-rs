@@ -98,8 +98,6 @@ fn random_lcs() {
     random_lcs_instance(300, 20);
 }
 
-// TODO: Large almost equal sequences
-
 //-----------------------------------------------------------------------------
 
 fn extract_path(graph: &GBZ, path_id: usize, orientation: Orientation) -> Vec<usize> {
@@ -213,6 +211,70 @@ fn path_lcs_weights() {
 
     assert_eq!(lcs(&left, &right), unweighted_truth, "Incorrect unweighted LCS");
     assert_eq!(path_lcs(&left, &right, &graph), (path_truth, path_len), "Incorrect path LCS");
+}
+
+//-----------------------------------------------------------------------------
+
+fn fast_vs_naive_instance(len: usize, sigma: usize, max_weight: usize) {
+    let weights: Vec<usize> = (0..sigma).map(|_| rand::thread_rng().gen_range(1..=max_weight)).collect();
+    let weight = &|x: usize| -> usize { weights[x] };
+    let left = random_sequence(len, sigma);
+    let right = random_sequence(len, sigma);
+    let fast = fast_weighted_lcs(&left, &right, weight);
+    let naive = naive_weighted_lcs(&left, &right, weight);
+
+    // Check the results. The two algorithms may find different subsequences with the same total weight.
+    let test = format!("(len {}, sigma {}, max weight {})", len, sigma, max_weight);
+    assert_eq!(fast.1, naive.1, "Total weights differ for {}", test);
+    let mut fast_weight = 0;
+    for (i, (a_offset, b_offset)) in fast.0.iter().copied().enumerate() {
+        assert_eq!(left[a_offset], right[b_offset], "Incorrect LCS element {} with the fast algorithm for {}", i, test);
+        fast_weight += weight(left[a_offset]);
+    }
+    assert_eq!(fast_weight, fast.1, "Incorrect total weight with the fast algorithm for {}", test);
+    let mut naive_weight = 0;
+    for (i, (a_offset, b_offset)) in naive.0.iter().copied().enumerate() {
+        assert_eq!(left[a_offset], right[b_offset], "Incorrect LCS element {} with the naive algorithm for {}", i, test);
+        naive_weight += weight(left[a_offset]);
+    }
+    assert_eq!(naive_weight, naive.1, "Incorrect total weight with the naive algorithm for {}", test);
+}
+
+#[test]
+fn fast_vs_naive_lcs() {
+    fast_vs_naive_instance(10, 5, 10);
+    fast_vs_naive_instance(30, 10, 15);
+    fast_vs_naive_instance(100, 15, 20);
+}
+
+fn similar_sequences(len: usize, sigma: usize, max_weight: usize, mutation_rate: f64) {
+    let weights: Vec<usize> = (0..sigma).map(|_| rand::thread_rng().gen_range(1..=max_weight)).collect();
+    let weight = &|x: usize| -> usize { weights[x] };
+    let left = random_sequence(len, sigma);
+    let mut right = left.clone();
+    let mut rng = rand::thread_rng();
+    for i in 0..len {
+        if rng.gen_bool(mutation_rate) {
+            right[i] = rng.gen_range(0..sigma);
+        }
+    }
+    let result = fast_weighted_lcs(&left, &right, weight);
+
+    // Check the results. The two algorithms may find different subsequences with the same total weight.
+    let test = format!("(len {}, sigma {}, max weight {}, mutation rate {})", len, sigma, max_weight, mutation_rate);
+    let mut total_weight = 0;
+    for (i, (a_offset, b_offset)) in result.0.iter().copied().enumerate() {
+        assert_eq!(left[a_offset], right[b_offset], "Incorrect LCS element {} for {}", i, test);
+        total_weight += weight(left[a_offset]);
+    }
+    assert_eq!(total_weight, result.1, "Incorrect total weight for {}", test);
+}
+
+#[test]
+fn similar_sequences_lcs() {
+    similar_sequences(100, 5, 10, 0.02);
+    similar_sequences(1000, 10, 15, 0.01);
+    similar_sequences(10000, 15, 20, 0.005);
 }
 
 //-----------------------------------------------------------------------------

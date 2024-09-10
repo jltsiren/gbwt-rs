@@ -49,6 +49,9 @@ pub fn naive_weighted_lcs<F: Fn(usize) -> usize>(a: &[usize], b: &[usize], weigh
 
 //-----------------------------------------------------------------------------
 
+// TODO: We do not need to store the weight. Due to the invariant, we can derive it from
+// edits and the prefix sums.
+// TODO: We could make this more space-efficient by using 32-bit integers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct DPPoint {
     // Twice the total weight of the LCS up to this point.
@@ -225,7 +228,6 @@ impl<'a> DPMatrix<'a> {
     }
 }
 
-// FIXME tests against the naive algorithm
 /// Returns the longest common subsequence of integer sequences `a` and `b`, weighted by the given function.
 ///
 /// The subsequence is returned as pairs of positions, and the second return value is the total weight of the LCS.

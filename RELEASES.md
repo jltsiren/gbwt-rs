@@ -4,7 +4,11 @@
 
 * New functionality:
   * `GBZ::reference_positions` for finding positions on reference paths for indexing by sequence offsets.
-  * GBZ methods for setting and iterating over reference samples.
+  * GBZ methods for setting reference samples and iterating over them.
+  * Longest common subsequence algorithms:
+    * `lcs()` for two integer sequences.
+    * `path_lcs()` for two paths, weighted by sequence lengths.
+    * `fast_weighted_lcs()` for two integer sequences, weighted by an arbitrary function.
 
 ## GBWT-rs 0.3.0 (2024-01-29)
 
