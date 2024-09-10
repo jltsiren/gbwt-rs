@@ -20,10 +20,10 @@ mod tests;
 /// See [`fast_weighted_lcs`] for an implementation based on Myers' O(nd) algorithm.
 pub fn naive_weighted_lcs<F: Fn(usize) -> usize>(a: &[usize], b: &[usize], weight: F) -> (Vec<(usize, usize)>, usize) {
     let mut dp = vec![vec![0; b.len() + 1]; a.len() + 1];
-    for i in 0..a.len() {
-        for j in 0..b.len() {
+    for (i, a_val) in a.iter().enumerate() {
+        for (j, b_val) in b.iter().enumerate() {
             dp[i + 1][j + 1] = cmp::max(dp[i + 1][j], dp[i][j + 1]);
-            if a[i] == b[j] {
+            if a_val == b_val {
                 dp[i + 1][j + 1] = cmp::max(dp[i + 1][j + 1], dp[i][j] + weight(a[i]));
             }
         }
@@ -169,7 +169,7 @@ impl<'a> DPMatrix<'a> {
                 self.points.insert((edits, diagonal), point);
             }
             if point.a_offset == self.a.len() && point.b_offset == self.b.len() {
-                return Some(point.clone());
+                return Some(point);
             }
             if point.a_offset < self.a.len() {
                 let weight = self.a_weight(point.a_offset);
