@@ -32,6 +32,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+pub mod algorithms;
 pub mod bwt;
 pub mod gbwt;
 pub mod gbz;

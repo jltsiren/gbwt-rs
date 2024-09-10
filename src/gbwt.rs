@@ -529,7 +529,7 @@ impl BidirectionalState {
 
 /// An iterator over a sequence in [`GBWT`].
 ///
-/// The type of `Item` is [`usize`].
+/// The type of `Item` is [`prim@usize`].
 ///
 /// # Examples
 ///
