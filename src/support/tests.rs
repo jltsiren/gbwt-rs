@@ -41,9 +41,12 @@ fn reverse_sequences() {
 
 #[test]
 fn reverse_paths() {
-    let original = vec![1, 2, 4, 6];
+    let mut original = vec![1, 2, 4, 6];
     let reversed = reverse_path(&original);
     assert_eq!(reversed, vec![7, 5, 3, 0], "Failed to reverse the path correctly");
+
+    reverse_path_in_place(&mut original);
+    assert_eq!(original, reversed, "Failed to reverse the path in place correctly");
 }
 
 #[test]

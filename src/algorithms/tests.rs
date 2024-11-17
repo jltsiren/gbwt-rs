@@ -128,7 +128,7 @@ fn empty_path_lcs() {
     assert_eq!(path_lcs(&path, &empty, &graph), truth, "Non-empty LCS for empty second input");
 
     let reverse = extract_path(&graph, 0, Orientation::Reverse);
-    assert_eq!(path_lcs(&path, &reverse, &graph), truth, "Non-empty LCS non-overlapping paths");
+    assert_eq!(path_lcs(&path, &reverse, &graph), truth, "Non-empty LCS for non-overlapping paths");
 }
 
 #[test]

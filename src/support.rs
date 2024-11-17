@@ -274,10 +274,23 @@ pub fn encoded_path_is_canonical(path: &[usize]) -> bool {
 ///
 /// The path is assumed to be a sequence of GBWT node identifiers.
 /// A reverse path visits the other orientation of each node in reverse order.
+/// See also [`reverse_path_in_place`].
 pub fn reverse_path(path: &[usize]) -> Vec<usize> {
     let mut result: Vec<usize> = path.iter().map(|x| flip_node(*x)).collect();
     result.reverse();
     result
+}
+
+/// Reverses the given path in place.
+///
+/// The path is assumed to be a sequence of GBWT node identifiers.
+/// A reverse path visits the other orientation of each node in reverse order.
+/// See also [`reverse_path`].
+pub fn reverse_path_in_place(path: &mut Vec<usize>) {
+    path.reverse();
+    for node in path.iter_mut() {
+        *node = flip_node(*node);
+    }
 }
 
 //-----------------------------------------------------------------------------
