@@ -1246,11 +1246,13 @@ impl<'a> RLEIter<'a> {
     }
 
     /// Returns the next byte from the slice, or [`None`] if there are no more bytes left.
+    #[inline]
     pub fn byte(&mut self) -> Option<u8> {
         self.source.byte()
     }
 
     /// Returns the next [`ByteCode`]-encoded integer from the slice, or [`None`] if no more integers can be decoded.
+    #[inline]
     pub fn int(&mut self) -> Option<usize> {
         self.source.next()
     }
