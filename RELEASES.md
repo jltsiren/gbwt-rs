@@ -9,6 +9,7 @@
     * `lcs()` for two integer sequences.
     * `path_lcs()` for two paths, weighted by sequence lengths.
     * `fast_weighted_lcs()` for two integer sequences, weighted by an arbitrary function.
+  * `GraphPosition` for storing a position in the graph.
 
 ## GBWT-rs 0.3.0 (2024-01-29)
 

@@ -52,6 +52,35 @@ impl fmt::Display for Orientation {
     }
 }
 
+/// Position in a bidirected sequence graph.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GraphPosition {
+    /// Identifier of the node.
+    pub node: usize,
+    /// Orientation of the node.
+    pub orientation: Orientation,
+    /// Offset in the node.
+    pub offset: usize,
+}
+
+impl GraphPosition {
+    /// Creates a new graph position.
+    #[inline]
+    pub fn new(node: usize, orientation: Orientation, offset: usize) -> Self {
+        GraphPosition {
+            node, orientation, offset,
+        }
+    }
+
+    /// Returns the GBWT node identifier corresponding to the position.
+    #[inline]
+    pub fn to_gbwt(&self) -> usize {
+        encode_node(self.node, self.orientation)
+    }
+}
+
+//-----------------------------------------------------------------------------
+
 const fn generate_complement_table() -> [u8; 256] {
     let mut result: [u8; 256] = [b'N'; 256];
     result[b'A' as usize] = b'T'; result[b'a' as usize] = b'T';

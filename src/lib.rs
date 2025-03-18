@@ -51,7 +51,7 @@ pub use crate::bwt::Pos;
 pub use crate::gbwt::{GBWT, SearchState, BidirectionalState, Metadata, PathName, FullPathName};
 pub use crate::gbz::GBZ;
 pub use crate::graph::Segment;
-pub use crate::support::Orientation;
+pub use crate::support::{GraphPosition, Orientation};
 
 //-----------------------------------------------------------------------------
 
