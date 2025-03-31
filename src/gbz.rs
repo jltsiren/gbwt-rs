@@ -241,20 +241,20 @@ impl GBZ {
         Header::<GBZPayload>::found_in(filename)
     }
 
-    // Converts a node id in the original graph to a sequence id.
+    // Converts a node id in the original graph to the identifier of a node sequence.
     #[inline]
     fn graph_node_to_sequence(&self, node_id: usize) -> usize {
         let gbwt_node = support::encode_node(node_id, Orientation::Forward);
         Self::gbwt_node_to_sequence(&self.index, gbwt_node)
     }
 
-    // Converts a GBWT node id to a sequence id.
+    // Converts a GBWT node id to the identifier of a node sequence.
     #[inline]
     fn gbwt_node_to_sequence(index: &GBWT, gbwt_node: usize) -> usize {
         (gbwt_node - index.first_node()) / 2
     }
 
-    // Converts a sequence id to a node id in the original graph.
+    // Converts the identifier of a node sequence to a node id in the original graph.
     #[inline]
     fn sequence_to_graph_node(&self, sequence_id: usize) -> usize {
         support::node_id(sequence_id * 2 + self.index.first_node())
@@ -331,14 +331,7 @@ impl GBZ {
         let gbwt_node = support::encode_node(node_id, orientation);
         let record_id = self.index.node_to_record(gbwt_node);
         let record = self.index.as_ref().record(record_id)?;
-        let next = if record.outdegree() > 0 && record.successor(0) == ENDMARKER { 1 } else { 0 };
-        let limit = record.outdegree();
-        Some(EdgeIter {
-            record,
-            next,
-            limit,
-            flip: false,
-        })
+        Some(EdgeIter::new(record, false))
     }
 
     /// Returns an iterator over the predecessors of a node, or [`None`] if there is no such node.
@@ -356,14 +349,7 @@ impl GBZ {
         let gbwt_node = support::encode_node(node_id, orientation.flip());
         let record_id = self.index.node_to_record(gbwt_node);
         let record = self.index.as_ref().record(record_id)?;
-        let next = if record.outdegree() > 0 && record.successor(0) == ENDMARKER { 1 } else { 0 };
-        let limit = record.outdegree();
-        Some(EdgeIter {
-            record,
-            next,
-            limit,
-            flip: true,
-        })
+        Some(EdgeIter::new(record, true))
     }
 }
 
@@ -834,6 +820,23 @@ pub struct EdgeIter<'a> {
     limit: usize,
     // Flip the orientation in the iterated values.
     flip: bool,
+}
+
+impl<'a> EdgeIter<'a> {
+    /// Creates a new iterator over the successors of the record.
+    ///
+    /// If `flip` is `true`, the iterator will flip the orientation of the successors.
+    /// This is effectively the same as listing the predecessors of the reverse orientation of the record.
+    pub fn new(record: Record<'a>, flip: bool) -> Self {
+        let next = if record.outdegree() > 0 && record.successor(0) == ENDMARKER { 1 } else { 0 };
+        let limit = record.outdegree();
+        EdgeIter {
+            record,
+            next,
+            limit,
+            flip,
+        }
+    }
 }
 
 impl<'a> Iterator for EdgeIter<'a> {
