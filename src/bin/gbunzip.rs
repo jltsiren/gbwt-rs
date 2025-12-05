@@ -187,7 +187,7 @@ fn write_gfa(gbz: &GBZ, config: &Config) -> io::Result<()> {
         let file = options.create(true).write(true).truncate(true).open(filename)?;
         write_gfa_impl(gbz, file, config)?;
     } else {
-        write_gfa_impl(gbz, io::stdout(), config)?;
+        write_gfa_impl(gbz, io::stdout().lock(), config)?;
     }
     Ok(())
 }
