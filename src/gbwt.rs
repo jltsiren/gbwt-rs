@@ -98,6 +98,7 @@ pub struct GBWT {
     tags: Tags,
     bwt: BWT,
     endmarker: Vec<Pos>,
+    da_samples: Vec<u64>, // We pass the data through but cannot interpret it.
     metadata: Option<Metadata>,
 }
 
@@ -395,7 +396,7 @@ impl Serialize for GBWT {
     fn serialize_body<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
         self.tags.serialize(writer)?;
         self.bwt.serialize(writer)?;
-        serialize::absent_option(writer)?; // Document array samples.
+        self.da_samples.serialize(writer)?; // Document array samples.
         self.metadata.serialize(writer)?;
         Ok(())
     }
@@ -414,7 +415,8 @@ impl Serialize for GBWT {
         // Decompress the endmarker, as the record can be poorly compressible.
         let endmarker = if bwt.is_empty() { Vec::new() } else { bwt.record(ENDMARKER).unwrap().decompress() };
 
-        serialize::skip_option(reader)?; // Document array samples.
+        // We cannot interpret the document array samples from the C++ implementation.
+        let da_samples = Vec::<u64>::load(reader)?;
 
         // Metadata.
         let metadata = Option::<Metadata>::load(reader)?;
@@ -431,12 +433,12 @@ impl Serialize for GBWT {
         }
 
         Ok(GBWT {
-            header, tags, bwt, endmarker, metadata,
+            header, tags, bwt, endmarker, da_samples, metadata,
         })
     }
 
     fn size_in_elements(&self) -> usize {
-        self.header.size_in_elements() + self.tags.size_in_elements() + self.bwt.size_in_elements() + serialize::absent_option_size() + self.metadata.size_in_elements()
+        self.header.size_in_elements() + self.tags.size_in_elements() + self.bwt.size_in_elements() + self.da_samples.size_in_elements() + self.metadata.size_in_elements()
     }
 }
 

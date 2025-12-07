@@ -10,6 +10,8 @@
     * `path_lcs()` for two paths, weighted by sequence lengths.
     * `fast_weighted_lcs()` for two integer sequences, weighted by an arbitrary function.
   * `GraphPosition` for storing a position in the graph.
+  * `GBWT` passes through document array samples from the C++ implementation.
+    * The C++ implementation no longer has to resample the GBWT if a GBZ file has been modified by this implementation.
 
 ## GBWT-rs 0.3.0 (2024-01-29)
 
