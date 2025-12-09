@@ -121,7 +121,7 @@ impl BWT {
     }
 
     /// Returns the `i`th record, or [`None`] if there is no such node.
-    pub fn record(&self, i: usize) -> Option<Record> {
+    pub fn record(&'_ self, i: usize) -> Option<Record<'_>> {
         if i >= self.len() {
             return None;
         }
@@ -145,7 +145,7 @@ impl BWT {
     /// Returns an iterator over the records in the BWT.
     ///
     /// Note that the iterator skips empty records.
-    pub fn iter(&self) -> RecordIter {
+    pub fn iter(&'_ self) -> RecordIter<'_> {
         RecordIter {
             parent: self,
             next: 0,
@@ -153,7 +153,7 @@ impl BWT {
     }
 
     /// Returns an iterator over the identifiers of non-empty records in the BWT.
-    pub fn id_iter(&self) -> IdIter {
+    pub fn id_iter(&'_ self) -> IdIter<'_> {
         IdIter {
             parent: self,
             iter: self.index.one_iter(),

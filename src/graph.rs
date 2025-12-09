@@ -138,7 +138,7 @@ impl Graph {
     /// Returns an iterator over the sequences in the graph.
     ///
     /// If there are gaps in the node id space of the graph, sequences corresponding to unused id may be empty.
-    pub fn iter(&self) -> StringIter {
+    pub fn iter(&'_ self) -> StringIter<'_> {
         self.sequences.iter()
     }
 }
@@ -169,7 +169,7 @@ impl Graph {
     /// # Panics
     ///
     /// May panic if `id >= self.segments()`.
-    pub fn segment(&self, id: usize) -> Segment {
+    pub fn segment(&'_ self, id: usize) -> Segment<'_> {
         let name = self.segment_name(id);
         let nodes = self.segment_nodes(id);
         let sequence = self.sequences.range(nodes.start - 1..nodes.end - 1);
@@ -183,7 +183,7 @@ impl Graph {
     /// # Panics
     ///
     /// May panic if `node_id == 0` or `node_id > self.sequences()` or if there is no node-to-segment translation.
-    pub fn node_to_segment(&self, node_id: usize) -> Segment {
+    pub fn node_to_segment(&'_ self, node_id: usize) -> Segment<'_> {
         let mut iter = self.mapping.predecessor(node_id);
         let (segment_id, start) = iter.next().unwrap();
         let end = if let Some((_, value)) = iter.next() { value } else { self.mapping.len() };
@@ -265,7 +265,7 @@ impl Graph {
     /// Returns an iterator over the segments in the graph.
     ///
     /// If there are gaps in the node id space of the graph, segments corresponding to unused ids may be empty.
-    pub fn segment_iter(&self) -> SegmentIter {
+    pub fn segment_iter(&'_ self) -> SegmentIter<'_> {
         let mut iter = self.mapping.one_iter();
         let first_node = if let Some((_, value)) = iter.next() { value } else { 0 };
         let next = (0, first_node);

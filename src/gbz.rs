@@ -309,7 +309,7 @@ impl GBZ {
     /// Returns an iterator over the node identifiers in the original graph.
     ///
     /// See [`NodeIter`] for an example.
-    pub fn node_iter(&self) -> NodeIter {
+    pub fn node_iter(&'_ self) -> NodeIter<'_> {
         NodeIter {
             parent: self,
             iter: self.real_nodes.one_iter()
@@ -324,7 +324,7 @@ impl GBZ {
     ///
     /// * `node_id`: Identifier of the node.
     /// * `orientation`: Orientation of the node.
-    pub fn successors(&self, node_id: usize, orientation: Orientation) -> Option<EdgeIter> {
+    pub fn successors(&'_ self, node_id: usize, orientation: Orientation) -> Option<EdgeIter<'_>> {
         if !self.has_node(node_id) {
             return None;
         }
@@ -342,7 +342,7 @@ impl GBZ {
     ///
     /// * `node_id`: Identifier of the node.
     /// * `orientation`: Orientation of the node.
-    pub fn predecessors(&self, node_id: usize, orientation: Orientation) -> Option<EdgeIter> {
+    pub fn predecessors(&'_ self, node_id: usize, orientation: Orientation) -> Option<EdgeIter<'_>> {
         if !self.has_node(node_id) {
             return None;
         }
@@ -367,7 +367,7 @@ impl GBZ {
     ///
     /// Returns [`None`] if there is no such node or if the graph does not contain a node-to-segment translation.
     /// Note that random access to the translation is somewhat slow.
-    pub fn node_to_segment(&self, node_id: usize) -> Option<Segment> {
+    pub fn node_to_segment(&'_ self, node_id: usize) -> Option<Segment<'_>> {
         if self.has_translation() && self.has_node(node_id) {
             Some(self.graph.node_to_segment(node_id))
         } else {
@@ -378,7 +378,7 @@ impl GBZ {
     /// Returns an iterator over the segments in the GFA graph, or [`None`] if there is no node-to-segment translation.
     ///
     /// See [`SegmentIter`] for an example.
-    pub fn segment_iter(&self) -> Option<SegmentIter> {
+    pub fn segment_iter(&'_ self) -> Option<SegmentIter<'_>> {
         if self.has_translation() {
             Some(SegmentIter {
                 parent: self,
@@ -399,7 +399,7 @@ impl GBZ {
     ///
     /// * `segment`: A valid segment in the GFA graph.
     /// * `orientation`: Orientation of the segment.
-    pub fn segment_successors(&self, segment: &Segment, orientation: Orientation) -> Option<LinkIter> {
+    pub fn segment_successors(&'_ self, segment: &Segment, orientation: Orientation) -> Option<LinkIter<'_>> {
         if segment.nodes.is_empty() || !self.has_translation() {
             return None;
         }
@@ -424,7 +424,7 @@ impl GBZ {
     ///
     /// * `segment`: A valid segment in the GFA graph.
     /// * `orientation`: Orientation of the segment.
-    pub fn segment_predecessors(&self, segment: &Segment, orientation: Orientation) -> Option<LinkIter> {
+    pub fn segment_predecessors(&'_ self, segment: &Segment, orientation: Orientation) -> Option<LinkIter<'_>> {
         if segment.nodes.is_empty() || !self.has_translation() {
             return None;
         }
@@ -458,7 +458,7 @@ impl GBZ {
     ///
     /// * `path_id`: Path identifier in the original graph.
     /// * `orientation`: Orientation of the path.
-    pub fn path(&self, path_id: usize, orientation: Orientation) -> Option<PathIter> {
+    pub fn path(&'_ self, path_id: usize, orientation: Orientation) -> Option<PathIter<'_>> {
         let iter = self.index.sequence(support::encode_path(path_id, orientation))?;
         Some(PathIter {
             iter,
@@ -474,7 +474,7 @@ impl GBZ {
     ///
     /// * `path_id`: Path identifier in the original graph.
     /// * `orientation`: Orientation of the path.
-    pub fn segment_path(&self, path_id: usize, orientation: Orientation) -> Option<SegmentPathIter> {
+    pub fn segment_path(&'_ self, path_id: usize, orientation: Orientation) -> Option<SegmentPathIter<'_>> {
         if !self.has_translation() {
             return None;
         }
@@ -516,7 +516,7 @@ impl GBZ {
     /// Each forward extension extends the path corresponding to the initial state by a single node.
     /// An extension is empty if the corresponding path is not a subpath of any path in the GBWT index.
     /// See [`StateIter`] for an example.
-    pub fn follow_forward(&self, state: &BidirectionalState) -> Option<StateIter> {
+    pub fn follow_forward(&'_ self, state: &BidirectionalState) -> Option<StateIter<'_>> {
         let (node_id, orientation) = support::decode_node(state.forward.node);
         let iter = self.successors(node_id, orientation)?;
         Some(StateIter {
@@ -532,7 +532,7 @@ impl GBZ {
     /// Each backward extension extends the path corresponding to the initial state by a single node.
     /// An extension is empty if the corresponding path is not a subpath of any path in the GBWT index.
     /// See [`StateIter`] for an example.
-    pub fn follow_backward(&self, state: &BidirectionalState) -> Option<StateIter> {
+    pub fn follow_backward(&'_ self, state: &BidirectionalState) -> Option<StateIter<'_>> {
         let state = state.flip();
         let (node_id, orientation) = support::decode_node(state.forward.node);
         let iter = self.successors(node_id, orientation)?;

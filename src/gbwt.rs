@@ -17,7 +17,6 @@ use crate::support::{Dictionary, StringIter, Tags};
 use crate::support;
 
 use simple_sds::serialize::{Serialize, Serializable};
-use simple_sds::serialize;
 
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
@@ -251,7 +250,7 @@ impl GBWT {
     }
 
     /// Returns an iterator over sequence `id`, or [`None`] if there is no such sequence.
-    pub fn sequence(&self, id: usize) -> Option<SequenceIter> {
+    pub fn sequence(&'_ self, id: usize) -> Option<SequenceIter<'_>> {
         if id >= self.sequences() {
             return None;
         }
@@ -714,7 +713,7 @@ impl Metadata {
     }
 
     /// Returns an iterator over path names.
-    pub fn path_iter(&self) -> slice::Iter<PathName> {
+    pub fn path_iter(&'_ self) -> slice::Iter<'_, PathName> {
         self.path_names.iter()
     }
 }
@@ -767,7 +766,7 @@ impl Metadata {
     }
 
     /// Returns an iterator over sample names.
-    pub fn sample_iter(&self) -> StringIter {
+    pub fn sample_iter(&'_ self) -> StringIter<'_> {
         self.sample_names.as_ref().iter()
     }
 }
@@ -815,7 +814,7 @@ impl Metadata {
     }
 
     /// Returns an iterator over contig names.
-    pub fn contig_iter(&self) -> StringIter {
+    pub fn contig_iter(&'_ self) -> StringIter<'_> {
         self.contig_names.as_ref().iter()
     }
 }
