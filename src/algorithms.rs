@@ -210,20 +210,17 @@ impl<'a> DPMatrix<'a> {
         } else {
             None
         };
-        if prev.is_some() && next.is_some() {
-            let prev = prev.unwrap();
-            let next = next.unwrap();
-            if prev.weight > next.weight {
-                Some((prev, edits - self.a_weight(a_offset - 1)))
-            } else {
-                Some((next, edits - self.b_weight(b_offset - 1)))
-            }
-        } else if let Some(point) = prev {
-            Some((point, edits - self.a_weight(a_offset - 1)))
-        } else if let Some(point) = next {
-            Some((point, edits - self.b_weight(b_offset - 1)))
-        } else {
-            None
+        match (prev, next) {
+            (Some(p), Some(n)) => {
+                if p.weight > n.weight {
+                    Some((p, edits - self.a_weight(a_offset - 1)))
+                } else {
+                    Some((n, edits - self.b_weight(b_offset - 1)))
+                }
+            },
+            (Some(p), None) => Some((p, edits - self.a_weight(a_offset - 1))),
+            (None, Some(n)) => Some((n, edits - self.b_weight(b_offset - 1))),
+            (None, None) => None,
         }
     }
 }

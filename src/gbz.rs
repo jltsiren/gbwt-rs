@@ -921,12 +921,7 @@ impl<'a> Iterator for SegmentIter<'a> {
     type Item = Segment<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        for segment in self.iter.by_ref() {
-            if self.parent.has_node(segment.nodes.start) {
-                return Some(segment);
-            }
-        }
-        None
+        self.iter.by_ref().find(|segment| self.parent.has_node(segment.nodes.start))
     }
 
     #[inline]

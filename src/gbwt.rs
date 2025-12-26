@@ -21,7 +21,7 @@ use simple_sds::serialize::{Serialize, Serializable};
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
 use std::ops::Range;
-use std::{fmt, io, slice, usize};
+use std::{fmt, io, slice};
 
 #[cfg(test)]
 mod tests;
@@ -294,12 +294,11 @@ impl GBWT {
         if node < self.first_node() {
             return None;
         }
-        if let Some(record) = self.bwt.record(self.node_to_record(state.node)) {
-            if let Some(range) = record.follow(state.range.clone(), node) {
-                return Some(SearchState {
-                    node, range,
-                })
-            }
+        if let Some(record) = self.bwt.record(self.node_to_record(state.node))
+            && let Some(range) = record.follow(state.range.clone(), node) {
+            return Some(SearchState {
+                node, range,
+            })
         }
         None
     }
@@ -422,12 +421,10 @@ impl Serialize for GBWT {
         if header.is_set(GBWTPayload::FLAG_METADATA) != metadata.is_some() {
             return Err(Error::new(ErrorKind::InvalidData, "GBWT: Invalid metadata flag in the header"));
         }
-        if let Some(meta) = metadata.as_ref() {
-            if meta.has_path_names() {
-                let expected = if header.is_set(GBWTPayload::FLAG_BIDIRECTIONAL) { header.payload().sequences / 2 } else { header.payload().sequences };
-                if meta.paths() > 0 && meta.paths() != expected {
-                    return Err(Error::new(ErrorKind::InvalidData, "GBWT: Invalid path count in the metadata"));
-                }
+        if let Some(meta) = metadata.as_ref() && meta.has_path_names() {
+            let expected = if header.is_set(GBWTPayload::FLAG_BIDIRECTIONAL) { header.payload().sequences / 2 } else { header.payload().sequences };
+            if meta.paths() > 0 && meta.paths() != expected {
+                return Err(Error::new(ErrorKind::InvalidData, "GBWT: Invalid path count in the metadata"));
             }
         }
 
@@ -692,11 +689,10 @@ impl Metadata {
         let mut prev_fragment = 0;
         let mut result: Option<usize> = None;
         for (i, path) in self.path_names.iter().enumerate() {
-            if path.sample == path_name.sample && path.contig == path_name.contig && path.phase == path_name.phase && path.fragment <= path_name.fragment {
-                if result.is_none() || (result.is_some() && path.fragment > prev_fragment) {
-                    prev_fragment = path.fragment;
-                    result = Some(i);
-                }
+            if path.is_predecessor_of(&path_name)
+            && (result.is_none() || (result.is_some() && path.fragment > prev_fragment)) {
+                prev_fragment = path.fragment;
+                result = Some(i);
             }
         }
         result
@@ -934,6 +930,11 @@ impl PathName {
     /// Returns the fragment identifier / running count.
     pub fn fragment(&self) -> usize {
         self.fragment as usize
+    }
+
+    /// Returns `true` if this is the same path or a predecessor fragment of the other path.
+    pub fn is_predecessor_of(&self, other: &PathName) -> bool {
+        self.sample == other.sample && self.contig == other.contig && self.phase == other.phase && self.fragment <= other.fragment
     }
 }
 

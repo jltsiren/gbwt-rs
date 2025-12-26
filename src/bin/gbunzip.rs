@@ -34,10 +34,8 @@ fn main() -> Result<(), String> {
     if !gbz.has_metadata() {
         return Err("GFA decompression requires GBWT metadata".to_string());
     }
-    if let Some(metadata) = gbz.metadata() {
-        if !metadata.has_path_names() {
-            return Err("GFA decompression requires path names".to_string());
-        }
+    if let Some(metadata) = gbz.metadata() && !metadata.has_path_names() {
+        return Err("GFA decompression requires path names".to_string());
     }
     if config.verbose {
         let (size, units) = internal::readable_size(gbz.size_in_bytes());

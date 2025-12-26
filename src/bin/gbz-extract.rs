@@ -143,7 +143,7 @@ impl Config {
             }
         }
         if let Some(s) = matches.opt_str("endmarker-char") {
-            if s.as_bytes().len() == 1 {
+            if s.len() == 1 {
                 config.endmarker = s.as_bytes()[0];
             } else {
                 return Err(format!("Invalid endmarker character: {}", s));
@@ -251,10 +251,9 @@ fn select_paths(gbz: &GBZ, metadata: &Metadata, config: &Config) -> Result<Vec<u
 
     // Select all paths in the selected components.
     for path_id in 0..gbz.paths() {
-        if let Some((node_id, _)) = gbz.path(path_id, Orientation::Forward).unwrap().next() {
-            if selected_components.contains(&node_to_component[&node_id]) {
-                selected_paths.push(path_id);
-            }
+        if let Some((node_id, _)) = gbz.path(path_id, Orientation::Forward).unwrap().next()
+            && selected_components.contains(&node_to_component[&node_id]) {
+            selected_paths.push(path_id);
         }
     }
     if config.verbose {

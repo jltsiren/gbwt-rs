@@ -116,10 +116,9 @@ impl<T: Payload> Header<T> {
 
     /// Returns `true` if the given file starts with a header of this type.
     pub fn found_in<P: AsRef<Path>>(filename: P) -> bool {
-        if let Ok(mut file) = std::fs::File::open(filename) {
-            if let Ok(header) = Self::load(&mut file) {
-                return header.tag == T::TAG;
-            }
+        if let Ok(mut file) = std::fs::File::open(filename)
+            && let Ok(header) = Self::load(&mut file) {
+            return header.tag == T::TAG;
         }
         false
     }
