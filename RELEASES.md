@@ -12,6 +12,7 @@
   * `GraphPosition` for storing a position in the graph.
   * `GBWT` passes through document array samples from the C++ implementation.
     * The C++ implementation no longer has to resample the GBWT if a GBZ file has been modified by this implementation.
+* Error type is always `String`, `Utf8Error`, or `io::Error`.
 
 ## GBWT-rs 0.3.0 (2024-01-29)
 

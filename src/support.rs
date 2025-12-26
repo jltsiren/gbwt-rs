@@ -742,7 +742,7 @@ impl Serialize for Dictionary {
 }
 
 impl TryFrom<StringArray> for Dictionary {
-    type Error = &'static str;
+    type Error = String;
 
     fn try_from(source: StringArray) -> Result<Self, Self::Error> {
         // Sort the ids and check for duplicates.
@@ -753,7 +753,7 @@ impl TryFrom<StringArray> for Dictionary {
         sorted.sort_unstable_by(|a, b| source.bytes(*a).cmp(source.bytes(*b)));
         for i in 1..sorted.len() {
             if source.bytes(sorted[i - 1]) == source.bytes(sorted[i]) {
-                return Err("Cannot build a dictionary from a source with duplicate strings");
+                return Err(String::from("Cannot build a dictionary from a source with duplicate strings"));
             }
         }
 
@@ -770,7 +770,7 @@ impl TryFrom<StringArray> for Dictionary {
 }
 
 impl<T: AsRef<str>> TryFrom<&[T]> for Dictionary {
-    type Error = &'static str;
+    type Error = String;
 
     fn try_from(source: &[T]) -> Result<Self, Self::Error> {
         Self::try_from(StringArray::from(source))
@@ -778,7 +778,7 @@ impl<T: AsRef<str>> TryFrom<&[T]> for Dictionary {
 }
 
 impl<T: AsRef<str>> TryFrom<Vec<T>> for Dictionary {
-    type Error = &'static str;
+    type Error = String;
 
     fn try_from(source: Vec<T>) -> Result<Self, Self::Error> {
         Self::try_from(StringArray::from(source))
