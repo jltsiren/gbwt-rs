@@ -1,9 +1,8 @@
 [package]
 name = "gbwt"
 version = "0.3.0"
-authors = ["Jouni Siren <jouni.siren@iki.fi>"]
-edition = "2018"
-description = "Partial reimplementation of the GBWT."
+edition = "2024"
+description = "Partial reimplementation of the GBWT"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/jltsiren/gbwt-rs"
@@ -12,14 +11,14 @@ repository = "https://github.com/jltsiren/gbwt-rs"
 binaries = ["getopts", "libc", "rand", "rayon"]
 
 [dependencies]
-simple-sds = { git = "https://github.com/jltsiren/simple-sds", branch = "main" }
+simple-sds = { version = "0.4.0" }
 getopts = { version = "0.2", optional = true }
 libc = { version = "0.2", optional = true }
-rand = { version = "0.8", optional = true }
-rayon = { version = "1.5", optional = true }
+rand = { version = "0.9", optional = true }
+rayon = { version = "1.11", optional = true }
 
 [dev-dependencies]
-rand = "0.8"
+rand = "0.9"
 
 [[bin]]
 name = "benchmark"

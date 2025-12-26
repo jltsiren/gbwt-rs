@@ -71,8 +71,8 @@ fn minimal_maximal_lcs() {
 }
 
 fn random_sequence(len: usize, sigma: usize) -> Vec<usize> {
-    let mut rng = rand::thread_rng();
-    (0..len).map(|_| rng.gen_range(0..sigma)).collect()
+    let mut rng = rand::rng();
+    (0..len).map(|_| rng.random_range(0..sigma)).collect()
 }
 
 fn random_lcs_instance(len: usize, sigma: usize) {
@@ -216,7 +216,7 @@ fn path_lcs_weights() {
 //-----------------------------------------------------------------------------
 
 fn fast_vs_naive_instance(len: usize, sigma: usize, max_weight: usize) {
-    let weights: Vec<usize> = (0..sigma).map(|_| rand::thread_rng().gen_range(1..=max_weight)).collect();
+    let weights: Vec<usize> = (0..sigma).map(|_| rand::rng().random_range(1..=max_weight)).collect();
     let weight = &|x: usize| -> usize { weights[x] };
     let left = random_sequence(len, sigma);
     let right = random_sequence(len, sigma);
@@ -248,14 +248,14 @@ fn fast_vs_naive_lcs() {
 }
 
 fn similar_sequences(len: usize, sigma: usize, max_weight: usize, mutation_rate: f64) {
-    let weights: Vec<usize> = (0..sigma).map(|_| rand::thread_rng().gen_range(1..=max_weight)).collect();
+    let weights: Vec<usize> = (0..sigma).map(|_| rand::rng().random_range(1..=max_weight)).collect();
     let weight = &|x: usize| -> usize { weights[x] };
     let left = random_sequence(len, sigma);
     let mut right = left.clone();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     for i in 0..len {
-        if rng.gen_bool(mutation_rate) {
-            right[i] = rng.gen_range(0..sigma);
+        if rng.random_bool(mutation_rate) {
+            right[i] = rng.random_range(0..sigma);
         }
     }
     let result = fast_weighted_lcs(&left, &right, weight);

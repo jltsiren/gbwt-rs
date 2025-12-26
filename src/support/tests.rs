@@ -307,16 +307,16 @@ fn remove_tags() {
 
 // Generate a random value, with the width (almost) geometrically distributed (p = 0.5) in blocks of `w` bits.
 fn generate_value(rng: &mut ThreadRng, w: usize) -> usize {
-    let len = (rng.gen::<usize>() | 1).leading_zeros() as usize; // 0 to 63
+    let len = (rng.random::<u64>() | 1).leading_zeros() as usize; // 0 to 63
     let width = cmp::min((len + 1) * w, bits::WORD_BITS);
     let mask = bits::low_set(width) as usize;
-    rng.gen::<usize>() & mask
+    rng.random::<u64>() as usize & mask
 }
 
 // Generate `n` random values, with the widths (almost) geometrically distributed (p = 0.5) in blocks of `w` bits.
 fn generate_values(n: usize, w: usize) -> Vec<usize> {
     let mut result = Vec::with_capacity(n);
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     for _ in 0..n {
         result.push(generate_value(&mut rng, w));
     }
@@ -354,9 +354,9 @@ fn random_byte_code() {
 fn generate_runs(n: usize, sigma: usize, w: usize) -> Vec<Run> {
     let sigma = if sigma == 0 { usize::MAX } else { sigma };
     let mut result = Vec::with_capacity(n);
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     for _ in 0..n {
-        let c: usize = rng.gen_range(0..sigma);
+        let c: usize = rng.random_range(0..sigma);
         let len = generate_value(&mut rng, w) + 1;
         result.push(Run::new(c, len));
     }
@@ -498,7 +498,7 @@ fn random_sets(len: usize, offset: usize, num_sets: usize, rng: &mut ThreadRng) 
         result.push(vec![value]);
     }
     for &value in values[num_sets..len].iter() {
-        let set = rng.gen::<usize>() % num_sets;
+        let set = rng.random::<u64>() as usize % num_sets;
         result[set].push(value);
     }
 
@@ -508,7 +508,7 @@ fn random_sets(len: usize, offset: usize, num_sets: usize, rng: &mut ThreadRng) 
 fn join_sets(sets: &mut DisjointSets, source: &Vec<Vec<usize>>, rng: &mut ThreadRng) {
     for set in source.iter() {
         for right in 1..set.len() {
-            let left = rng.gen::<usize>() % right;
+            let left = rng.random::<u64>() as usize % right;
             sets.union(set[left], set[right]);
         }
     }
@@ -543,7 +543,7 @@ fn zero_offset_disjoint_sets() {
     assert_eq!(sets.is_empty(), len == 0, "Invalid emptiness");
     assert_eq!(sets.offset(), offset, "Invalid offset");
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut source = random_sets(len, offset, num_sets, &mut rng);
     join_sets(&mut sets, &source, &mut rng);
     sort_sets(&mut source);
@@ -566,7 +566,7 @@ fn non_zero_offset_disjoint_sets() {
     assert_eq!(sets.is_empty(), len == 0, "Invalid emptiness");
     assert_eq!(sets.offset(), offset, "Invalid offset");
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut source = random_sets(len, offset, num_sets, &mut rng);
     join_sets(&mut sets, &source, &mut rng);
     sort_sets(&mut source);
@@ -589,7 +589,7 @@ fn filtered_disjoint_sets() {
     assert_eq!(sets.is_empty(), len == 0, "Invalid emptiness");
     assert_eq!(sets.offset(), offset, "Invalid offset");
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let source = random_sets(len, offset, num_sets, &mut rng);
     join_sets(&mut sets, &source, &mut rng);
     let mut source = filter_sets(source, |value| value % 3 != 0);

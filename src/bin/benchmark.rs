@@ -124,13 +124,13 @@ impl Config {
 fn generate_queries(index: &GBWT, config: &Config) -> Vec<Vec<usize>> {
     println!("Generating {} queries of length {}", config.queries, config.query_len);
     let mut queries: Vec<Vec<usize>> = Vec::new();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     while queries.len() < config.queries {
         let mut query: Vec<usize> = Vec::new();
-        let mut curr = Pos::new(rng.gen_range(index.first_node()..index.alphabet_size()), 0);
+        let mut curr = Pos::new(rng.random_range(index.first_node()..index.alphabet_size()), 0);
         if let Some(state) = index.find(curr.node) {
-            curr.offset = rng.gen_range(0..state.len());
+            curr.offset = rng.random_range(0..state.len());
         } else {
             continue;
         }
