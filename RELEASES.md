@@ -1,6 +1,6 @@
 # GBWT-rs releases
 
-## Current version
+## GBWT-rs 0.4.0 (2025-12-26)
 
 * New functionality:
   * `GBZ::reference_positions` for finding positions on reference paths for indexing by sequence offsets.
