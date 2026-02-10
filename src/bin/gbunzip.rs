@@ -4,7 +4,7 @@
 )]
 
 use gbwt::{GBWT, GBZ, Orientation};
-use gbwt::{REF_SAMPLE, REFERENCE_SAMPLES_KEY};
+use gbwt::{GENERIC_SAMPLE, REFERENCE_SAMPLES_KEY};
 use gbwt::internal;
 
 use simple_sds::serialize::Serialize;
@@ -343,7 +343,7 @@ enum LineType {
 fn write_paths<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> io::Result<()> {
     let start = Instant::now();
     let metadata = gbz.metadata().unwrap();
-    let ref_sample = metadata.sample_id(REF_SAMPLE);
+    let ref_sample = metadata.sample_id(GENERIC_SAMPLE);
     if ref_sample.is_none() {
         eprintln!("No named paths in the graph");
         return Ok(());
@@ -396,7 +396,7 @@ fn write_pan_sn<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> 
 fn write_walks<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> io::Result<()> {
     let start = Instant::now();
     let metadata = gbz.metadata().unwrap();
-    let ref_sample = metadata.sample_id(REF_SAMPLE).unwrap_or(metadata.samples());
+    let ref_sample = metadata.sample_id(GENERIC_SAMPLE).unwrap_or(metadata.samples());
     if config.verbose {
         eprintln!("Writing walks");
     }

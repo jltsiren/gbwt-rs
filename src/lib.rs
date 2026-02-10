@@ -68,7 +68,7 @@ pub const SOURCE_VALUE: &str = "jltsiren/gbwt-rs";
 ///
 /// This sample name is used for GFA P-lines with opaque string names. The actual name
 /// is stored as a contig name.
-pub const REF_SAMPLE: &str = "_gbwt_ref";
+pub const GENERIC_SAMPLE: &str = "_gbwt_ref";
 
 /// Key for the tag listing the names of reference samples.
 pub const REFERENCE_SAMPLES_KEY: &str = "reference_samples";

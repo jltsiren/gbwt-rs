@@ -178,11 +178,11 @@ fn reference_samples() {
     assert!(gbz.reference_sample_ids(false).is_empty(), "The graph should not have reference sample ids");
     assert!(gbz.reference_sample_names(false).is_empty(), "The graph should not have reference sample names");
     assert_eq!(gbz.reference_sample_ids(true), vec![0], "Invalid reference + generic sample ids (default)");
-    assert_eq!(gbz.reference_sample_names(true), vec![String::from(REF_SAMPLE)], "Invalid reference + generic sample names (default)");
+    assert_eq!(gbz.reference_sample_names(true), vec![String::from(GENERIC_SAMPLE)], "Invalid reference + generic sample names (default)");
 
     // Add a reference sample.
     let ref_samples = vec![String::from("sample")];
-    let ref_and_generic = vec![String::from("sample"), String::from(REF_SAMPLE)];
+    let ref_and_generic = vec![String::from("sample"), String::from(GENERIC_SAMPLE)];
     assert_eq!(gbz.set_reference_samples(&ref_samples), 1, "Could not set reference samples (correct)");
     assert_eq!(gbz.reference_sample_ids(false), vec![1], "Invalid reference sample ids (correct)");
     assert_eq!(gbz.reference_sample_names(false), ref_samples, "Invalid reference sample names (correct)");
@@ -199,7 +199,7 @@ fn reference_samples() {
 
     // Try nonexistent names.
     let nonexistent = vec![String::from("nonexistent")];
-    let generic_only = vec![String::from(REF_SAMPLE)];
+    let generic_only = vec![String::from(GENERIC_SAMPLE)];
     assert_eq!(gbz.set_reference_samples(&nonexistent), 0, "Could not set reference samples (nonexistent)");
     assert_eq!(gbz.reference_sample_ids(false), Vec::new(), "Invalid reference sample ids (nonexistent)");
     assert_eq!(gbz.reference_sample_names(false), Vec::<String>::new(), "Invalid reference sample names (nonexistent)");

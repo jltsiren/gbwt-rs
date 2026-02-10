@@ -9,7 +9,7 @@
 //! At the moment, this implementation only supports GBWT indexes built with other tools.
 //! See also the original [C++ implementation](https://github.com/jltsiren/gbwt).
 
-use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE, REF_SAMPLE};
+use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE, GENERIC_SAMPLE};
 use crate::{Orientation, Pos};
 use crate::bwt::{BWT, Record};
 use crate::headers::{Header, GBWTPayload, MetadataPayload};
@@ -953,7 +953,7 @@ impl Serializable for PathName {}
 ///
 /// The path can be a generic path, a reference path, or a haplotype path in a similar way to vg path senses.
 ///
-/// * Generic paths have [`REF_SAMPLE`] as their sample name, and their actual name is stored as contig name.
+/// * Generic paths have [`GENERIC_SAMPLE`] as their sample name, and their actual name is stored as contig name.
 /// * Reference paths have `0` both as the haplotype and the fragment, and their names are of the form `sample#contig`.
 /// * Haplotype paths start their haplotype numbers from `1`, and their names are of the form `sample#haplotype#contig@fragment`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -987,7 +987,7 @@ impl FullPathName {
     /// Returns a new generic path name.
     pub fn generic(name: &str) -> Self {
         FullPathName {
-            sample: String::from(REF_SAMPLE),
+            sample: String::from(GENERIC_SAMPLE),
             contig: String::from(name),
             haplotype: 0,
             fragment: 0,
@@ -1031,7 +1031,7 @@ impl FullPathName {
 
 impl fmt::Display for FullPathName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.sample == REF_SAMPLE {
+        if self.sample == GENERIC_SAMPLE {
             write!(f, "{}", self.contig)
         } else if self.haplotype == 0 && self.fragment == 0 {
             write!(f, "{}#{}", self.sample, self.contig)

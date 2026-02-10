@@ -648,7 +648,7 @@ fn full_path_name_generic() {
 
     let string_name = name;
     assert_eq!(&path_name.to_string(), string_name, "Wrong string representation");
-    check_path_name(&path_name, REF_SAMPLE, name, 0, 0, 123);
+    check_path_name(&path_name, GENERIC_SAMPLE, name, 0, 0, 123);
 }
 
 #[test]

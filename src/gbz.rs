@@ -12,7 +12,7 @@
 //!
 //! See also the [C++ implementation](https://github.com/jltsiren/gbwtgraph) and the [file format specification](https://github.com/jltsiren/gbwtgraph/blob/master/SERIALIZATION.md).
 
-use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE, REF_SAMPLE, REFERENCE_SAMPLES_KEY};
+use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE, GENERIC_SAMPLE, REFERENCE_SAMPLES_KEY};
 use crate::{Segment, GBWT, BidirectionalState, Orientation, Pos};
 use crate::bwt::Record;
 use crate::gbwt::{SequenceIter, Metadata};
@@ -144,7 +144,7 @@ impl GBZ {
     }
 
     // Internal method that returns a list of potential reference sample names.
-    // Includes the generic sample [`REF_SAMPLE`] if `also_generic` is `true`.
+    // Includes the generic sample [`GENERIC_SAMPLE`] if `also_generic` is `true`.
     fn reference_samples_impl(&self, also_generic: bool) -> Vec<String> {
         let mut result: Vec<String> = Vec::new();
         let ref_samples = self.index.tags().get(REFERENCE_SAMPLES_KEY);
@@ -154,7 +154,7 @@ impl GBZ {
             }
         }
         if also_generic {
-            result.push(String::from(REF_SAMPLE));
+            result.push(String::from(GENERIC_SAMPLE));
         }
         result
     }
@@ -162,7 +162,7 @@ impl GBZ {
     /// Returns the list of reference sample identifiers in the metadata.
     ///
     /// Reference sample names are set using the [`REFERENCE_SAMPLES_KEY`] tag in the GBWT index.
-    /// If `also_generic` is `true`, the result includes the identifier of the generic sample [`REF_SAMPLE`].
+    /// If `also_generic` is `true`, the result includes the identifier of the generic sample [`GENERIC_SAMPLE`].
     /// This does not return the idenfiers for samples that are not present in the metadata.
     pub fn reference_sample_ids(&self, also_generic: bool) -> Vec<usize> {
         let metadata = self.metadata();
@@ -178,7 +178,7 @@ impl GBZ {
     /// Returns the list of reference sample names.
     ///
     /// The names are based on the [`REFERENCE_SAMPLES_KEY`] tag in the GBWT index.
-    /// If `also_generic` is `true`, the result includes the generic reference sample [`REF_SAMPLE`].
+    /// If `also_generic` is `true`, the result includes the generic reference sample [`GENERIC_SAMPLE`].
     /// This does not return sample names that are not present in the metadata.
     pub fn reference_sample_names(&self, also_generic: bool) -> Vec<String> {
         let metadata = self.metadata();
@@ -202,7 +202,7 @@ impl GBZ {
     /// The reference samples are stored in the GBWT index using the [`REFERENCE_SAMPLES_KEY`] tag.
     /// This method sets only those sample names that are present in the metadata.
     /// If the GBWT index does not contain metadata, this method does nothing.
-    /// This will not allow setting the generic sample [`REF_SAMPLE`] as a reference sample.
+    /// This will not allow setting the generic sample [`GENERIC_SAMPLE`] as a reference sample.
     /// If there are no reference samples, the tag is removed from the GBWT index.
     pub fn set_reference_samples(&mut self, samples: &[String]) -> usize {
         let metadata = self.metadata();
@@ -213,7 +213,7 @@ impl GBZ {
 
         let mut ref_samples: BTreeSet<String> = BTreeSet::new();
         for sample in samples {
-            if metadata.sample_id(sample).is_some() && sample != REF_SAMPLE {
+            if metadata.sample_id(sample).is_some() && sample != GENERIC_SAMPLE {
                 ref_samples.insert(sample.clone());
             }
         }
