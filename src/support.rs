@@ -6,12 +6,15 @@ use simple_sds::serialize::Serialize;
 use simple_sds::sparse_vector::SparseVector;
 use simple_sds::bits;
 
+use zstd::stream::Encoder as ZstdEncoder;
+use zstd::stream::Decoder as ZstdDecoder;
+
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::collections::btree_map::Iter as TagIter;
 use std::collections::hash_map::Entry;
 use std::convert::TryFrom;
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Write, Read};
 use std::iter::FusedIterator;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -346,7 +349,8 @@ pub fn get_test_data(filename: &'static str) -> PathBuf {
 ///
 /// The strings are concatenated and stored in a single byte vector.
 /// This reduces the space overhead for the strings and the time overhead for serializing and loading them.
-/// The serialization format further compresses the starting positions and compacts the alphabet in an attempt to use fewer than 8 bits per byte.
+/// Serialization with [`Serialize`] further compresses the starting positions and compacts the alphabet in an attempt to use fewer than 8 bits per byte.
+/// Compressed serialization using [`Self::compress`] and [`Self::decompress`] uses Zstandard compression for the concatenated strings.
 ///
 /// `StringArray` can be built from a [`Vec`] or a slice of any type that can be converted to a string slice.
 /// Construction from an iterator is not feasible, as `StringArray` needs to know the total length of the strings in advance.
@@ -372,6 +376,9 @@ pub struct StringArray {
 }
 
 impl StringArray {
+    /// Default compression level for Zstandard.
+    pub const DEFAULT_COMPRESSION_LEVEL: i32 = 3;
+
     /// Returns the number of strings in the array.
     #[inline]
     pub fn len(&self) -> usize {
@@ -494,6 +501,71 @@ impl StringArray {
         }
 
         (bytes_to_packed, packed_to_bytes, width)
+    }
+
+    /// Serializes the struct as a compressed string array to the given writer.
+    ///
+    /// Uses Zstandard compression for the sequences.
+    /// If a compression level is not provided, [`Self::DEFAULT_COMPRESSION_LEVEL`] is used.
+    ///
+    /// # Errors
+    ///
+    /// Passes through any I/O errors and compression errors.
+    pub fn compress<T: io::Write>(&self, writer: &mut T, compression_level: Option<i32>) -> io::Result<()> {
+        // Compress the index without the past-the-end sentinel.
+        let sv = SparseVector::try_from_iter(self.index.iter().take(self.len()).map(|x| x as usize)).unwrap();
+        sv.serialize(writer)?;
+        drop(sv);
+
+        // We want to know the uncompressed length of the concatenated strings.
+        let total_len = self.strings.len();
+        total_len.serialize(writer)?;
+
+        // Compress the strings into a vector of bytes using zstd and serialize it.
+        // We cannot write directly into the writer, as we need to know the compressed size in advance.
+        let compression_level = compression_level.unwrap_or(Self::DEFAULT_COMPRESSION_LEVEL);
+        let mut encoder = ZstdEncoder::new(Vec::new(), compression_level)?;
+        encoder.write_all(&self.strings)?;
+        let compressed = encoder.finish()?;
+        compressed.serialize(writer)?;
+
+        Ok(())
+    }
+
+    /// Deserializes a compressed string array from the given reader.
+    ///
+    /// Uses Zstandard compression for the sequences.
+    ///
+    /// # Errors
+    ///
+    /// Passes through any I/O errors and decompression errors.
+    /// Returns [`ErrorKind::InvalidData`] if the data is not internally consistent.
+    pub fn decompress<T: io::Read>(reader: &mut T) -> io::Result<Self> {
+        // Load the compressed index and the total length of the concatenated strings.
+        let sv = SparseVector::load(reader)?;
+        let total_len = usize::load(reader)?;
+
+        // Decompress the index.
+        let mut index = IntVector::with_capacity(sv.count_ones() + 1, bits::bit_len(total_len as u64)).unwrap();
+        index.extend(sv.one_iter().map(|(_, x)| x));
+        index.push(total_len as u64);
+        drop(sv);
+        if index.get(0) != 0 {
+            return Err(Error::new(ErrorKind::InvalidData, "StringArray: First string does not start at offset 0"));
+        }
+
+        // Load and decompress the strings.
+        let compressed: Vec<u8> = Vec::load(reader)?;
+        let mut decoder = ZstdDecoder::new(&compressed[..])?;
+        let mut strings: Vec<u8> = Vec::with_capacity(total_len);
+        decoder.read_to_end(&mut strings)?;
+        if strings.len() != total_len {
+            return Err(Error::new(ErrorKind::InvalidData, "StringArray: Decompressed string length does not match the expected length"));
+        }
+
+        Ok(StringArray {
+            index, strings,
+        })
     }
 }
 

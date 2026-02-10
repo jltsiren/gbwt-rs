@@ -12,6 +12,7 @@ binaries = ["getopts", "libc", "rand", "rayon"]
 
 [dependencies]
 simple-sds = { version = "0.4.0" }
+zstd = { version = "0.13" }
 getopts = { version = "0.2", optional = true }
 libc = { version = "0.2", optional = true }
 rand = { version = "0.9", optional = true }
