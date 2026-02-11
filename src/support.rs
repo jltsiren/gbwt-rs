@@ -507,6 +507,7 @@ impl StringArray {
     ///
     /// Uses Zstandard compression for the sequences.
     /// If a compression level is not provided, [`Self::DEFAULT_COMPRESSION_LEVEL`] is used.
+    /// See [`Self::serialize`] for a non-compressed serialization format.
     ///
     /// # Errors
     ///
@@ -535,6 +536,7 @@ impl StringArray {
     /// Deserializes a compressed string array from the given reader.
     ///
     /// Uses Zstandard compression for the sequences.
+    /// See [`Self::load`] for a non-compressed serialization format.
     ///
     /// # Errors
     ///
@@ -566,6 +568,33 @@ impl StringArray {
         Ok(StringArray {
             index, strings,
         })
+    }
+
+    /// Returns the size of the compressed struct in [`u64`] elements with the given compression level.
+    ///
+    /// If a compression level is not provided, [`Self::DEFAULT_COMPRESSION_LEVEL`] is used.
+    /// See [`Self::size_in_elements`] for the size of the non-compressed struct.
+    ///
+    /// # Panics
+    ///
+    /// May panic due to compression errors.
+    pub fn compressed_size_in_elements(&self, compression_level: Option<i32>) -> usize {
+        let mut result = 0;
+
+        let sv = SparseVector::try_from_iter(self.index.iter().take(self.len()).map(|x| x as usize)).unwrap();
+        result += sv.size_in_elements();
+        drop(sv);
+
+        let total_len = self.strings.len();
+        result += total_len.size_in_elements();
+
+        let compression_level = compression_level.unwrap_or(Self::DEFAULT_COMPRESSION_LEVEL);
+        let mut encoder = ZstdEncoder::new(Vec::new(), compression_level).unwrap();
+        encoder.write_all(&self.strings).unwrap();
+        let compressed = encoder.finish().unwrap();
+        result += compressed.size_in_elements();
+
+        result
     }
 }
 

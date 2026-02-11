@@ -672,7 +672,7 @@ impl Serialize for GBZ {
     }
 
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
-        let header = Header::<GBZPayload>::load(reader)?;
+        let mut header = Header::<GBZPayload>::load(reader)?;
         if let Err(msg) = header.validate() {
             return Err(Error::new(ErrorKind::InvalidData, msg));
         }
@@ -702,6 +702,10 @@ impl Serialize for GBZ {
                 real_nodes.set_bit(Self::gbwt_node_to_sequence(&index, gbwt_node), true);
             }
         }
+
+        // Update the header to the latest version after we have used the
+        // serialized version for loading the correct data.
+        header.update();
 
         Ok(GBZ {
             header,

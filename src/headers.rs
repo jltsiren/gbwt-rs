@@ -294,12 +294,15 @@ impl GraphPayload {
 
     /// The serialized data is in the simple-sds format.
     pub const FLAG_SIMPLE_SDS: u64  = 0x0002;
+
+    /// First version with zstd-compressed sequences.
+    pub const ZSTD_VERSION: u32 = 4;
 }
 
 impl Payload for GraphPayload {
     const NAME: &'static str = "GraphHeader";
     const TAG: u32 = 0x6B3764AF;
-    const VERSION: u32 = 3;
+    const VERSION: u32 = 4;
     const MIN_VERSION: u32 = 3;
     const DEFAULT_FLAGS: u64 = Self::FLAG_SIMPLE_SDS;
 
@@ -328,7 +331,7 @@ pub struct GBZPayload {
 impl Payload for GBZPayload {
     const NAME: &'static str = "GBZHeader";
     const TAG: u32 = 0x205A4247;
-    const VERSION: u32 = 1;
+    const VERSION: u32 = 2;
     const MIN_VERSION: u32 = 1;
     const DEFAULT_FLAGS: u64 = 0;
 

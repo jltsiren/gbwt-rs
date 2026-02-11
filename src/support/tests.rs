@@ -1,6 +1,6 @@
 use super::*;
 
-use simple_sds::serialize;
+use simple_sds::{bits, serialize};
 
 use rand::Rng;
 use rand::seq::SliceRandom;
@@ -136,6 +136,13 @@ fn check_compression(array: &StringArray) {
 
     let result =array.compress(&mut file, None);
     assert!(result.is_ok(), "Failed to compress the string array: {}", result.err().unwrap());
+
+    let metadata = fs::metadata(&filename);
+    assert!(metadata.is_ok(), "Failed to get metadata for the temporary file: {}", metadata.err().unwrap());
+    let metadata = metadata.unwrap();
+    let file_size = metadata.len() as usize;
+    let reported_size = bits::words_to_bytes(array.compressed_size_in_elements(None));
+    assert_eq!(reported_size, file_size, "Reported compressed size does not match the actual file size");
 
     let mut options = OpenOptions::new();
     let file = options.read(true).open(&filename);

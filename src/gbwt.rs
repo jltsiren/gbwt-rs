@@ -400,7 +400,7 @@ impl Serialize for GBWT {
     }
 
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
-        let header = Header::<GBWTPayload>::load(reader)?;
+        let mut header = Header::<GBWTPayload>::load(reader)?;
         if let Err(msg) = header.validate() {
             return Err(Error::new(ErrorKind::InvalidData, msg));
         }
@@ -427,6 +427,10 @@ impl Serialize for GBWT {
                 return Err(Error::new(ErrorKind::InvalidData, "GBWT: Invalid path count in the metadata"));
             }
         }
+
+        // Update the header to the latest version after we have used the
+        // serialized version for loading the correct data.
+        header.update();
 
         Ok(GBWT {
             header, tags, bwt, endmarker, da_samples, metadata,
@@ -828,7 +832,7 @@ impl Serialize for Metadata {
     }
 
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
-        let header = Header::<MetadataPayload>::load(reader)?;
+        let mut header = Header::<MetadataPayload>::load(reader)?;
         if let Err(msg) = header.validate() {
             return Err(Error::new(ErrorKind::InvalidData, msg));
         }
@@ -855,6 +859,10 @@ impl Serialize for Metadata {
         } else if !contig_names.is_empty() {
             return Err(Error::new(ErrorKind::InvalidData, "Metadata: Contig names are present without the contig name flag"));
         }
+
+        // Update the header to the latest version after we have used the
+        // serialized version for loading the correct data.
+        header.update();
 
         Ok(Metadata {
             header, path_names, sample_names, contig_names,
