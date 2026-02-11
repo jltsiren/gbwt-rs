@@ -6,9 +6,7 @@ use simple_sds::serialize;
 
 use std::collections::{BTreeSet, BTreeMap, HashSet};
 
-// FIXME: update all GBZ/GBWTGraph test files to the latest versions
-// FIXME: create a copy of old GBZ files as v1
-// FIXME: test that we can still load the old files and that the loaded version is v2
+// FIXME: test that we can still load the v1 GBZs and that the loaded version is v2
 
 //-----------------------------------------------------------------------------
 
