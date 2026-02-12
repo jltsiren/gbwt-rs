@@ -1,5 +1,9 @@
 # GBWT-rs releases
 
+## Current version
+
+* Support for GBZ version 2 with Zstandard compression for sequences.
+
 ## GBWT-rs 0.4.0 (2025-12-26)
 
 * New functionality:

@@ -287,19 +287,24 @@ impl Serialize for Graph {
     }
 
     fn serialize_body<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
-        self.sequences.serialize(writer)?;
+        self.sequences.compress(writer, None)?;
         self.segments.serialize(writer)?;
         self.mapping.serialize(writer)?;
         Ok(())
     }
 
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
-        let header = Header::<GraphPayload>::load(reader)?;
+        let mut header = Header::<GraphPayload>::load(reader)?;
         if let Err(msg) = header.validate() {
             return Err(Error::new(ErrorKind::InvalidData, msg));
         }
 
-        let sequences = StringArray::load(reader)?;
+        // Decompress or deserialize the sequences.
+        let sequences = if header.version() >= GraphPayload::ZSTD_VERSION {
+            StringArray::decompress(reader)?
+        } else {
+            StringArray::load(reader)?
+        };
 
         let segments = StringArray::load(reader)?;
         if header.is_set(GraphPayload::FLAG_TRANSLATION) == segments.is_empty() {
@@ -323,13 +328,20 @@ impl Serialize for Graph {
             return Err(Error::new(ErrorKind::InvalidData, "Graph: Translation flag does not match the presence of node-to-segment mapping"));
         }
 
+        // Update the header to the latest version after we have used the
+        // serialized version for loading the correct data.
+        header.update();
+
         Ok(Graph {
             header, sequences, segments, mapping,
         })
     }
 
     fn size_in_elements(&self) -> usize {
-        self.header.size_in_elements() + self.sequences.size_in_elements() + self.segments.size_in_elements() + self.mapping.size_in_elements()
+        self.header.size_in_elements() +
+            self.sequences.compressed_size_in_elements(None) +
+            self.segments.size_in_elements() +
+            self.mapping.size_in_elements()
     }
 }
 

@@ -1,10 +1,12 @@
 use super::*;
 
-use simple_sds::serialize;
+use simple_sds::{bits, serialize};
 
 use rand::Rng;
 use rand::seq::SliceRandom;
 use rand::rngs::ThreadRng;
+
+use std::fs::{self, OpenOptions};
 
 //-----------------------------------------------------------------------------
 
@@ -124,12 +126,44 @@ fn check_array(array: &StringArray, truth: &[&str]) {
     }
 }
 
+fn check_compression(array: &StringArray) {
+    let filename = serialize::temp_file_name("string-array-compression");
+
+    let mut options = OpenOptions::new();
+    let file = options.write(true).create(true).open(&filename);
+    assert!(file.is_ok(), "Failed to create a temporary file: {}", file.err().unwrap());
+    let mut file = file.unwrap();
+
+    let result =array.compress(&mut file, None);
+    assert!(result.is_ok(), "Failed to compress the string array: {}", result.err().unwrap());
+
+    let metadata = fs::metadata(&filename);
+    assert!(metadata.is_ok(), "Failed to get metadata for the temporary file: {}", metadata.err().unwrap());
+    let metadata = metadata.unwrap();
+    let file_size = metadata.len() as usize;
+    let reported_size = bits::words_to_bytes(array.compressed_size_in_elements(None));
+    assert_eq!(reported_size, file_size, "Reported compressed size does not match the actual file size");
+
+    let mut options = OpenOptions::new();
+    let file = options.read(true).open(&filename);
+    assert!(file.is_ok(), "Failed to open the temporary file: {}", file.err().unwrap());
+    let mut file = file.unwrap();
+
+    let decompressed = StringArray::decompress(&mut file);
+    assert!(decompressed.is_ok(), "Failed to decompress the string array: {}", decompressed.err().unwrap());
+    let decompressed = decompressed.unwrap();
+    assert_eq!(&decompressed, array, "Decompressed string array does not match the original");
+
+    fs::remove_file(&filename).unwrap();
+}
+
 #[test]
 fn empty_string_array() {
     let truth: Vec<&str> = Vec::new();
     let array = StringArray::from(truth.as_slice());
     check_array(&array, &truth);
     let _ = serialize::test(&array, "empty-string-array", None, true);
+    check_compression(&array);
 }
 
 #[test]
@@ -138,15 +172,17 @@ fn non_empty_string_array() {
     let array = StringArray::from(truth.as_slice());
     check_array(&array, &truth);
     let _ = serialize::test(&array, "non-empty-string-array", None, true);
+    check_compression(&array);
 }
 
 #[test]
-fn array_with_empty_strings() {
+fn string_array_with_empty_strings() {
     // Serialization with an empty string at the end used to fail in the original GBWT implementation.
     let truth = vec!["first", "second", "", "fourth", ""];
     let array = StringArray::from(truth.as_slice());
     check_array(&array, &truth);
     let _ = serialize::test(&array, "string-array-with-empty", None, true);
+    check_compression(&array);
 }
 
 //-----------------------------------------------------------------------------
