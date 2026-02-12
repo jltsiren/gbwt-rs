@@ -6,8 +6,6 @@ use simple_sds::serialize;
 
 use std::collections::{BTreeSet, BTreeMap, HashSet};
 
-// FIXME: test that we can still load the v1 GBZs and that the loaded version is v2
-
 //-----------------------------------------------------------------------------
 
 fn check_nodes(gbz: &GBZ, true_nodes: &[(usize, &str)]) {
@@ -564,6 +562,51 @@ fn reference_positions() {
                 }
             }
             assert!(iter.next().is_none(), "Too many indexed positions for path {} with interval {}", paths[i].id, interval);
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+#[test]
+fn v1_files() {
+    let graphs = vec![
+        (support::get_test_data("example-v1.gbz"), support::get_test_data("example.gbz")),
+        (support::get_test_data("translation-v1.gbz"), support::get_test_data("translation.gbz")),
+    ];
+
+    for (v1_file, v2_file) in graphs.iter() {
+        let v1_graph = serialize::load_from::<GBZ, _>(&v1_file);
+        assert!(v1_graph.is_ok(), "Could not load v1 graph from file {}", v1_file.to_string_lossy());
+        let v1_graph = v1_graph.unwrap();
+
+        let v2_graph = serialize::load_from::<GBZ, _>(&v2_file);
+        assert!(v2_graph.is_ok(), "Could not load v2 graph from file {}", v2_file.to_string_lossy());
+        let v2_graph = v2_graph.unwrap();
+
+        assert_eq!(v1_graph.nodes(), v2_graph.nodes(), "Invalid number of nodes in v1 graph loaded from file {}", v1_file.to_string_lossy());
+        for node_id in v1_graph.node_iter() {
+            assert_eq!(v1_graph.sequence(node_id), v2_graph.sequence(node_id), "Invalid sequence for node {} in v1 graph loaded from file {}", node_id, v1_file.to_string_lossy());
+            let v1_succ = v1_graph.successors(node_id, Orientation::Forward).unwrap();
+            let v2_succ = v2_graph.successors(node_id, Orientation::Forward).unwrap();
+            assert!(v1_succ.eq(v2_succ), "Invalid successors for node {} in v1 graph loaded from file {}", node_id, v1_file.to_string_lossy());
+            let v1_pred = v1_graph.predecessors(node_id, Orientation::Forward).unwrap();
+            let v2_pred = v2_graph.predecessors(node_id, Orientation::Forward).unwrap();
+            assert!(v1_pred.eq(v2_pred), "Invalid predecessors for node {} in v1 graph loaded from file {}", node_id, v1_file.to_string_lossy());
+        }
+
+        assert_eq!(v1_graph.has_translation(), v2_graph.has_translation(), "Invalid translation presence in v1 graph loaded from file {}", v1_file.to_string_lossy());
+        if v1_graph.has_translation() {
+            let v1_segments = v1_graph.segment_iter().unwrap();
+            let v2_segments = v2_graph.segment_iter().unwrap();
+            assert!(v1_segments.eq(v2_segments), "Invalid segments in v1 graph loaded from file {}", v1_file.to_string_lossy());
+        }
+
+        assert_eq!(v1_graph.paths(), v2_graph.paths(), "Invalid number of paths in v1 graph loaded from file {}", v1_file.to_string_lossy());
+        for path_id in 0..v1_graph.paths() {
+            let v1_path = v1_graph.path(path_id, Orientation::Forward).unwrap();
+            let v2_path = v2_graph.path(path_id, Orientation::Forward).unwrap();
+            assert!(v1_path.eq(v2_path), "Invalid path {} in v1 graph loaded from file {}", path_id, v1_file.to_string_lossy());
         }
     }
 }
