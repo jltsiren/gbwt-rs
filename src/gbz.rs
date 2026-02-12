@@ -58,8 +58,8 @@ mod tests;
 /// ## Nodes
 ///
 /// ```
-/// use gbwt::GBZ;
-/// use gbwt::support;
+/// use gbz::GBZ;
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.gbz");
@@ -78,8 +78,8 @@ mod tests;
 /// ## Segments
 ///
 /// ```
-/// use gbwt::{GBZ, Segment};
-/// use gbwt::support;
+/// use gbz::{GBZ, Segment};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("translation.gbz");
@@ -94,8 +94,8 @@ mod tests;
 /// ## Paths
 ///
 /// ```
-/// use gbwt::{GBZ, Orientation};
-/// use gbwt::support;
+/// use gbz::{GBZ, Orientation};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.gbz");
@@ -555,8 +555,8 @@ impl GBZ {
     /// # Examples
     ///
     /// ```
-    /// use gbwt::GBZ;
-    /// use gbwt::support;
+    /// use gbz::GBZ;
+    /// use gbz::support;
     /// use simple_sds::serialize;
     ///
     /// let filename = support::get_test_data("example.gbz");
@@ -745,8 +745,8 @@ impl AsRef<Graph> for GBZ {
 /// # Examples
 ///
 /// ```
-/// use gbwt::GBZ;
-/// use gbwt::support;
+/// use gbz::GBZ;
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.gbz");
@@ -796,8 +796,8 @@ impl<'a> FusedIterator for NodeIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::{GBZ, Orientation};
-/// use gbwt::support;
+/// use gbz::{GBZ, Orientation};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.gbz");
@@ -901,8 +901,8 @@ impl<'a> FusedIterator for EdgeIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::{GBZ, Segment};
-/// use gbwt::support;
+/// use gbz::{GBZ, Segment};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("translation.gbz");
@@ -957,8 +957,8 @@ impl<'a> FusedIterator for SegmentIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::{GBZ, Segment, Orientation};
-/// use gbwt::support;
+/// use gbz::{GBZ, Segment, Orientation};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("translation.gbz");
@@ -1026,8 +1026,8 @@ impl<'a> FusedIterator for LinkIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::{GBZ, Orientation};
-/// use gbwt::support;
+/// use gbz::{GBZ, Orientation};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.gbz");
@@ -1070,8 +1070,8 @@ impl<'a> FusedIterator for PathIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::{GBZ, Orientation};
-/// use gbwt::support;
+/// use gbz::{GBZ, Orientation};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("translation.gbz");
@@ -1179,8 +1179,8 @@ impl<'a> FusedIterator for SegmentPathIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::{GBZ, Orientation, BidirectionalState};
-/// use gbwt::support;
+/// use gbz::{GBZ, Orientation, BidirectionalState};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.gbz");

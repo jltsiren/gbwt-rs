@@ -360,7 +360,7 @@ pub fn get_test_data(filename: &'static str) -> PathBuf {
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::StringArray;
+/// use gbz::support::StringArray;
 ///
 /// let source = vec!["first", "second", "third", "fourth"];
 /// let array = StringArray::from(source.as_slice());
@@ -679,7 +679,7 @@ impl<T: AsRef<str>> From<Vec<T>> for StringArray {
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::StringArray;
+/// use gbz::support::StringArray;
 /// use std::str;
 ///
 /// let source = vec!["first", "second", "third"];
@@ -744,7 +744,7 @@ impl<'a> FusedIterator for StringIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::Dictionary;
+/// use gbz::support::Dictionary;
 /// use std::convert::TryFrom;
 ///
 /// let source = vec!["first", "second", "third", "fourth"];
@@ -903,7 +903,7 @@ impl AsRef<StringArray> for Dictionary {
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::Tags;
+/// use gbz::support::Tags;
 ///
 /// let mut tags = Tags::new();
 /// tags.insert("first-key", "first-value");
@@ -1037,7 +1037,7 @@ impl From<ByteCode> for Vec<u8> {
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::ByteCode;
+/// use gbz::support::ByteCode;
 ///
 /// let mut encoder = ByteCode::new();
 /// encoder.write(123); encoder.write(456); encoder.write(789);
@@ -1102,7 +1102,7 @@ impl AsRef<[u8]> for ByteCode {
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::{ByteCode, ByteCodeIter};
+/// use gbz::support::{ByteCode, ByteCodeIter};
 ///
 /// let mut source = ByteCode::new();
 /// source.write(123); source.write(456); source.write(789);
@@ -1183,7 +1183,7 @@ impl<'a> FusedIterator for ByteCodeIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::{Run, RLE};
+/// use gbz::support::{Run, RLE};
 ///
 /// let mut encoder = RLE::with_sigma(4);
 /// encoder.write(Run::new(3, 12)); encoder.write(Run::new(2, 721)); encoder.write(Run::new(0, 34));
@@ -1331,7 +1331,7 @@ impl From<RLE> for Vec<u8> {
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::{Run, RLE, RLEIter};
+/// use gbz::support::{Run, RLE, RLEIter};
 ///
 /// let mut source = RLE::with_sigma(4);
 /// source.write(Run::new(3, 12)); source.write(Run::new(2, 721)); source.write(Run::new(0, 34));
@@ -1446,7 +1446,7 @@ impl<'a> FusedIterator for RLEIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::support::DisjointSets;
+/// use gbz::support::DisjointSets;
 ///
 /// let mut sets = DisjointSets::new(7, 2);
 /// assert_eq!(sets.len(), 7);

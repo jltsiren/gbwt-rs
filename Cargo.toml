@@ -1,8 +1,8 @@
 [package]
-name = "gbwt"
+name = "gbz"
 version = "0.4.0"
 edition = "2024"
-description = "Partial reimplementation of the GBWT"
+description = "GBZ file format for pangenome graphs"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/jltsiren/gbwt-rs"

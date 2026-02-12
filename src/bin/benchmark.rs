@@ -3,8 +3,8 @@
     clippy::new_without_default
 )]
 
-use gbwt::{GBWT, Pos};
-use gbwt::internal;
+use gbz::{GBWT, Pos};
+use gbz::internal;
 
 use simple_sds::serialize::Serialize;
 use simple_sds::serialize;

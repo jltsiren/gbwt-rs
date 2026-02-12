@@ -3,8 +3,8 @@
     clippy::new_without_default
 )]
 
-use gbwt::{GBZ, Orientation, Metadata};
-use gbwt::{internal, support};
+use gbz::{GBZ, Orientation, Metadata};
+use gbz::{internal, support};
 
 use simple_sds::serialize::Serialize;
 use simple_sds::serialize;

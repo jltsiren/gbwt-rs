@@ -288,7 +288,7 @@ pub fn fast_weighted_lcs<F: Fn(usize) -> usize>(a: &[usize], b: &[usize], weight
 /// # Examples
 ///
 /// ```
-/// use gbwt::algorithms::lcs;
+/// use gbz::algorithms::lcs;
 ///
 /// let a = vec![1, 2, 3, 4, 5];
 /// let b = vec![2, 4, 6, 8, 10];
@@ -309,8 +309,8 @@ pub fn lcs(a: &[usize], b: &[usize]) -> Vec<(usize, usize)> {
 /// # Examples
 ///
 /// ```
-/// use gbwt::{GBZ, Orientation, algorithms};
-/// use gbwt::support;
+/// use gbz::{GBZ, Orientation, algorithms};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("translation.gbz");

@@ -1,4 +1,4 @@
-//! # GBWT: Graph BWT
+//! # GBZ: GBWT and GBWTGraph
 //!
 //! This is a Rust reimplementation of parts of the [GBWT](https://github.com/jltsiren/gbwt) and the [GBWTGraph](https://github.com/jltsiren/gbwtgraph).
 //! It is based on the [Simple-SDS](https://github.com/jltsiren/simple-sds) library.

@@ -3,9 +3,9 @@
 //! # Examples
 //!
 //! ```
-//! use gbwt::Pos;
-//! use gbwt::bwt::{BWT, BWTBuilder};
-//! use gbwt::support::Run;
+//! use gbz::Pos;
+//! use gbz::bwt::{BWT, BWTBuilder};
+//! use gbz::support::Run;
 //!
 //! // Encode the GBWT example from the paper.
 //! let mut builder = BWTBuilder::new();
