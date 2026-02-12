@@ -1,6 +1,6 @@
-# GBWT-rs releases
+# Releases
 
-## Current version
+## GBZ 0.5.0 (2026-02-12)
 
 * Support for GBZ version 2 with Zstandard compression for sequences.
 * Renamed the crate from `gbwt` to `gbz` due to a name conflict in crates.io.
