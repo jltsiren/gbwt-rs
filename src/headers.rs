@@ -14,7 +14,7 @@ use simple_sds::serialize::{Serialize, Serializable};
 /// # Examples
 ///
 /// ```
-/// use gbwt::headers::{Header, Payload};
+/// use gbz::headers::{Header, Payload};
 /// use simple_sds::serialize::Serialize;
 ///
 /// #[derive(Copy, Clone, Default, PartialEq, Eq)]

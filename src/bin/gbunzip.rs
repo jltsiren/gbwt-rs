@@ -3,9 +3,9 @@
     clippy::new_without_default
 )]
 
-use gbwt::{GBWT, GBZ, Orientation};
-use gbwt::{GENERIC_SAMPLE, REFERENCE_SAMPLES_KEY};
-use gbwt::internal;
+use gbz::{GBWT, GBZ, Orientation};
+use gbz::{GENERIC_SAMPLE, REFERENCE_SAMPLES_KEY};
+use gbz::internal;
 
 use simple_sds::serialize::Serialize;
 use simple_sds::serialize;

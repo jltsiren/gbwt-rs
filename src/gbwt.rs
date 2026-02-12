@@ -44,8 +44,8 @@ mod tests;
 /// # Examples
 ///
 /// ```
-/// use gbwt::{GBWT, SearchState, Orientation};
-/// use gbwt::support;
+/// use gbz::{GBWT, SearchState, Orientation};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.gbwt");
@@ -536,8 +536,8 @@ impl BidirectionalState {
 /// # Examples
 ///
 /// ```
-/// use gbwt::{GBWT, Orientation};
-/// use gbwt::support;
+/// use gbz::{GBWT, Orientation};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.gbwt");
@@ -586,8 +586,8 @@ impl<'a> FusedIterator for SequenceIter<'a> {}
 /// # Examples
 ///
 /// ```
-/// use gbwt::{Metadata, FullPathName};
-/// use gbwt::support;
+/// use gbz::{Metadata, FullPathName};
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.meta");

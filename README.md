@@ -1,4 +1,4 @@
-# GBWT (in Rust)
+# GBZ file format for pangenome graphs
 
 This is a Rust reimplementation of parts of the [GBWT](https://github.com/jltsiren/gbwt) and the [GBWTGraph](https://github.com/jltsiren/gbwtgraph).
 It is based on the [Simple-SDS](https://github.com/jltsiren/simple-sds) library.
@@ -25,7 +25,7 @@ It is based on the [Simple-SDS](https://github.com/jltsiren/simple-sds) library.
 ### Possible future extensions
 
 * GBWT construction
-* GBWT merging
+* GBWT/GBZ merging
 * Cached GBWT
 
 ## Notes

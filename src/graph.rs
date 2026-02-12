@@ -38,8 +38,8 @@ mod tests;
 /// ## Sequences
 ///
 /// ```
-/// use gbwt::graph::Graph;
-/// use gbwt::support;
+/// use gbz::graph::Graph;
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("example.gg");
@@ -57,9 +57,9 @@ mod tests;
 /// ## Segments
 ///
 /// ```
-/// use gbwt::Segment;
-/// use gbwt::graph::Graph;
-/// use gbwt::support;
+/// use gbz::Segment;
+/// use gbz::graph::Graph;
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("translation.gg");
@@ -386,9 +386,9 @@ impl<'a> Segment<'a> {
 /// # Examples
 ///
 /// ```
-/// use gbwt::Segment;
-/// use gbwt::graph::Graph;
-/// use gbwt::support;
+/// use gbz::Segment;
+/// use gbz::graph::Graph;
+/// use gbz::support;
 /// use simple_sds::serialize;
 ///
 /// let filename = support::get_test_data("translation.gg");
