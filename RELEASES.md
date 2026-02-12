@@ -63,3 +63,13 @@ Minor patch release for the GBZ paper.
 This is a reimplementation of some parts of the GBWT and the GBWTGraph in Rust. At the moment, the main purpose is ensuring that the Simple-SDS file format specifications are complete enough. I may use this in future projects, but at the moment everything can change without warning.
 
 The first pre-release includes supports the GBWT Simple-SDS file format as well as path navigation, unidirectional/bidirectional search, and GBWT metadata. The next version will probably support GBWTGraph, the GBZ format, and GFA extraction.
+
+## Release process
+
+* Run `cargo clippy`.
+* Run tests with `cargo test`.
+* Update version in `Cargo.toml`.
+* Update `RELEASES.md`.
+* Publish in crates.io with `cargo publish`.
+* Push to GitHub.
+* Draft a new release in GitHub.
