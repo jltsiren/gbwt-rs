@@ -908,7 +908,7 @@ impl Serialize for Metadata {
 /// * Fragment field can be used as a fragment index for fragments from the sequence identified by (sample, contig, phase).
 ///   It can also be used as the starting offset of the fragment in the corresponding sequence.
 ///
-/// See also [`FullPathName`] for a stand-alone structure that contains the same information.
+/// See [`FullPathName`] for a stand-alone structure that contains the same information and documents some naming conventions.
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq)]
 pub struct PathName {
@@ -983,6 +983,8 @@ impl Serializable for PathName {}
 /// The path can be a generic path, a reference path, or a haplotype path in a similar way to vg path senses.
 ///
 /// * Generic paths have [`GENERIC_SAMPLE`] as their sample name, and their actual name is stored as contig name.
+///   * Both haplotype and fragment numbers are `0`.
+///   * When serialized, haplotype number becomes [`GENERIC_HAPLOTYPE`] to follow vg conventions.
 /// * Reference paths have `0` both as the haplotype and the fragment, and their names are of the form `sample#contig`.
 /// * Haplotype paths start their haplotype numbers from `1`, and their names are of the form `sample#haplotype#contig@fragment`.
 #[derive(Clone, Debug, PartialEq, Eq)]
