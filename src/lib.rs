@@ -70,6 +70,12 @@ pub const SOURCE_VALUE: &str = "jltsiren/gbwt-rs";
 /// is stored as a contig name.
 pub const GENERIC_SAMPLE: &str = "_gbwt_ref";
 
+/// Haplotype number for generic named paths.
+///
+/// The vg convention is to use haplotype number 2^32 - 1 (rather than 0) for generic paths.
+/// We follow the convention when (de)serializing path names but use haplotype number 0 internally.
+pub const GENERIC_HAPLOTYPE: u32 = u32::MAX;
+
 /// Key for the tag listing the names of reference samples.
 pub const REFERENCE_SAMPLES_KEY: &str = "reference_samples";
 

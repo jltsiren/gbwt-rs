@@ -603,6 +603,34 @@ fn path_names() {
     assert_eq!(name.size_in_elements(), 2, "Invalid serialized size for a path name");
 }
 
+fn check_generic_path_names(metadata: &Metadata, expected_count: usize, test_case: &str) {
+    let generic_sample_id = metadata.sample_id(GENERIC_SAMPLE);
+    assert!(generic_sample_id.is_some(), "{}: Generic sample name {} is missing", test_case, GENERIC_SAMPLE);
+    let generic_sample_id = generic_sample_id.unwrap();
+
+    let mut generic_count = 0;
+    for path_id in 0..metadata.paths() {
+        let path_name = metadata.path(path_id).unwrap();
+        if path_name.sample() == generic_sample_id {
+            generic_count += 1;
+            assert_eq!(path_name.phase(), 0, "{}: Generic path name {} has a nonzero phase", test_case, path_id);
+        }
+    }
+    assert_eq!(generic_count, expected_count, "{}: Invalid number of generic path names", test_case);
+}
+
+#[test]
+fn generic_path_names() {
+    let filename = support::get_test_data("example.meta");
+    let metadata: Metadata = serialize::load_from(&filename).unwrap();
+    check_generic_path_names(&metadata, 2, "example.meta");
+
+    let filename = support::get_test_data("example.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
+    let metadata = index.metadata().unwrap();
+    check_generic_path_names(metadata, 2, "example.gbwt");
+}
+
 //-----------------------------------------------------------------------------
 
 fn check_path_name(path_name: &FullPathName, sample: &str, contig: &str, haplotype: usize, fragment: usize, len: usize) {

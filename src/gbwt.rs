@@ -9,7 +9,7 @@
 //! At the moment, this implementation only supports GBWT indexes built with other tools.
 //! See also the original [C++ implementation](https://github.com/jltsiren/gbwt).
 
-use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE, GENERIC_SAMPLE};
+use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE, GENERIC_SAMPLE, GENERIC_HAPLOTYPE};
 use crate::{Orientation, Pos};
 use crate::bwt::{BWT, Record};
 use crate::headers::{Header, GBWTPayload, MetadataPayload};
@@ -825,7 +825,19 @@ impl Serialize for Metadata {
     }
 
     fn serialize_body<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
-        self.path_names.serialize(writer)?;
+        // Follow vg conventions with haplotype numbers for generic paths.
+        if let Some(id) = self.sample_id(GENERIC_SAMPLE) {
+            let mut path_names = self.path_names.clone();
+            for path in path_names.iter_mut() {
+                if path.sample() == id && path.phase == 0 {
+                    path.phase = GENERIC_HAPLOTYPE;
+                }
+            }
+            path_names.serialize(writer)?;
+        } else {
+            self.path_names.serialize(writer)?;
+        }
+
         self.sample_names.serialize(writer)?;
         self.contig_names.serialize(writer)?;
         Ok(())
@@ -837,7 +849,7 @@ impl Serialize for Metadata {
             return Err(Error::new(ErrorKind::InvalidData, msg));
         }
 
-        let path_names = Vec::<PathName>::load(reader)?;
+        let mut path_names = Vec::<PathName>::load(reader)?;
         if header.is_set(MetadataPayload::FLAG_PATH_NAMES) == path_names.is_empty() {
             return Err(Error::new(ErrorKind::InvalidData, "Metadata: Path name flag does not match the presence of path names"));
         }
@@ -863,6 +875,15 @@ impl Serialize for Metadata {
         // Update the header to the latest version after we have used the
         // serialized version for loading the correct data.
         header.update();
+
+        // Convert path names for generic paths from vg convention to ours.
+        if let Some(id) = sample_names.id(GENERIC_SAMPLE) {
+            for path in path_names.iter_mut() {
+                if path.sample() == id && path.phase == GENERIC_HAPLOTYPE {
+                    path.phase = 0;
+                }
+            }
+        }
 
         Ok(Metadata {
             header, path_names, sample_names, contig_names,
