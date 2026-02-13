@@ -1,5 +1,9 @@
 # Releases
 
+## GBZ 0.5.1 (2026-02-13)
+
+* Convert between internal and vg conventions for generic path names when (de)serializing metadata.
+
 ## GBZ 0.5.0 (2026-02-12)
 
 * Support for GBZ version 2 with Zstandard compression for sequences.
