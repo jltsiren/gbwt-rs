@@ -144,6 +144,11 @@ impl GBZ {
         &mut self.tags
     }
 
+    /// Returns a reference to the underlying GBWT index.
+    pub fn gbwt(&self) -> &GBWT {
+        &self.index
+    }
+
     // Internal method that returns a list of potential reference sample names.
     // Includes the generic sample [`GENERIC_SAMPLE`] if `also_generic` is `true`.
     fn reference_samples_impl(&self, also_generic: bool) -> Vec<String> {
