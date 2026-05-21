@@ -184,14 +184,14 @@ impl Metadata {
 
     /// Returns the number samples.
     pub fn samples(&self) -> usize {
-        self.header.payload().sample_count
+        self.header.payload().sample_count as usize
     }
 
     /// Returns the number of haplotypes.
     ///
     /// This generally corresponds to the number of full-length paths in a graph component.
     pub fn haplotypes(&self) -> usize {
-        self.header.payload().haplotype_count
+        self.header.payload().haplotype_count as usize
     }
 
     /// Returns the name of the sample with the given identifier, or [`None`] if there is no such sample or name.
@@ -239,7 +239,7 @@ impl Metadata {
     ///
     /// A contig usually corresponds to a graph component.
     pub fn contigs(&self) -> usize {
-        self.header.payload().contig_count
+        self.header.payload().contig_count as usize
     }
 
     /// Returns the name of the contig with the given identifier, or [`None`] if there is no such contig or name.
@@ -313,7 +313,7 @@ impl Serialize for Metadata {
 
         let sample_names = Dictionary::load(reader)?;
         if header.is_set(MetadataPayload::FLAG_SAMPLE_NAMES) {
-            if header.payload().sample_count != sample_names.len() {
+            if header.payload().sample_count as usize != sample_names.len() {
                 return Err(Error::new(ErrorKind::InvalidData, "Metadata: Sample count does not match the number of sample names"));
             }
         } else if !sample_names.is_empty() {
@@ -322,7 +322,7 @@ impl Serialize for Metadata {
 
         let contig_names = Dictionary::load(reader)?;
         if header.is_set(MetadataPayload::FLAG_CONTIG_NAMES) {
-            if header.payload().contig_count != contig_names.len() {
+            if header.payload().contig_count as usize != contig_names.len() {
                 return Err(Error::new(ErrorKind::InvalidData, "Metadata: Contig count does not match the number of contig names"));
             }
         } else if !contig_names.is_empty() {
@@ -355,9 +355,9 @@ impl Serialize for Metadata {
 impl From<MetadataBuilder> for Metadata {
     fn from(builder: MetadataBuilder) -> Self {
         let mut header = Header::<MetadataPayload>::default();
-        header.payload_mut().sample_count = builder.sample_names.len();
-        header.payload_mut().contig_count = builder.contig_names.len();
-        header.payload_mut().haplotype_count = builder.haplotypes.len();
+        header.payload_mut().sample_count = builder.sample_names.len() as u64;
+        header.payload_mut().contig_count = builder.contig_names.len() as u64;
+        header.payload_mut().haplotype_count = builder.haplotypes.len() as u64;
         header.set(MetadataPayload::FLAG_PATH_NAMES);
         header.set(MetadataPayload::FLAG_SAMPLE_NAMES);
         header.set(MetadataPayload::FLAG_CONTIG_NAMES);

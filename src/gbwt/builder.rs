@@ -859,13 +859,13 @@ impl From<MutableGBWT> for GBWT {
         if builder.has_metadata() {
             header.set(GBWTPayload::FLAG_METADATA);
         }
-        header.payload_mut().sequences = builder.sequences();
-        header.payload_mut().size = builder.len();
+        header.payload_mut().sequences = builder.sequences() as u64;
+        header.payload_mut().size = builder.len() as u64;
         if let Some(min_node) = builder.min_node() {
-            header.payload_mut().offset = min_node - 1;
+            header.payload_mut().offset = (min_node - 1) as u64;
         }
         if let Some(max_node) = builder.max_node() {
-            header.payload_mut().alphabet_size = max_node + 1;
+            header.payload_mut().alphabet_size = (max_node + 1) as u64;
         } else if !builder.is_empty() {
             // Special case when we have only empty sequences.
             header.payload_mut().alphabet_size = 1;
@@ -873,7 +873,7 @@ impl From<MutableGBWT> for GBWT {
 
         // Encode the BWT, including the endmarker record.
         let mut bwt_builder = BWTBuilder::new(&builder.endmarker_edges, &builder.endmarker);
-        for node_id in (header.payload().offset + 1)..header.payload().alphabet_size {
+        for node_id in (header.payload().offset as usize + 1)..header.payload().alphabet_size as usize {
             if let Some(record) = builder.records[node_id - builder.first_node].as_ref() {
                 bwt_builder.append(&record.outgoing, record.bwt.iter().map(|&run| Run::from(run)));
             } else {

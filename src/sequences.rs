@@ -97,7 +97,7 @@ impl Sequences {
     /// This may be less than the number of sequences, if there are gaps in the node id space.
     #[inline]
     pub fn nodes(&self) -> usize {
-        self.header.payload().nodes
+        self.header.payload().nodes as usize
     }
 
     /// Returns the number of sequences in the graph.
@@ -315,7 +315,7 @@ impl Serialize for Sequences {
         if header.is_set(SequencesPayload::FLAG_TRANSLATION) {
             // If there are no gaps in the node id space, `mapping.len() == header.payload().nodes + 1`.
             // Unused nodes create gaps.
-            if mapping.len() <= header.payload().nodes {
+            if mapping.len() <= header.payload().nodes as usize {
                 return Err(Error::new(ErrorKind::InvalidData, "Sequences: Node-to-segment mapping does not match the number of nodes"));
             }
             if mapping.len() != sequences.len() + 1 {

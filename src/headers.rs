@@ -185,20 +185,26 @@ pub trait Payload: Copy + Eq + Default {
 //-----------------------------------------------------------------------------
 
 /// Payload for the GBWT header.
+///
+/// Fields are `u64` rather than `usize` so the `#[repr(C)]` on-disk layout is
+/// identical on 32-bit and 64-bit targets. `Header<T>: Serializable` writes
+/// the payload as a raw `mem::size_of` byte copy; if any field were `usize`,
+/// a 32-bit consumer (e.g. `wasm32`) would misread payloads written on a
+/// 64-bit host. Accessors elsewhere cast to/from `usize` at the boundary.
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct GBWTPayload {
     /// Number of sequences in the GBWT.
-    pub sequences: usize,
+    pub sequences: u64,
 
     /// Total length of the sequences, including the endmarkers.
-    pub size: usize,
+    pub size: u64,
 
     /// Alphabet offset: node identifiers in `1..offset + 1` are not used.
-    pub offset: usize,
+    pub offset: u64,
 
     /// Alphabet size: all node identifiers are in `1..alphabet_size`.
-    pub alphabet_size: usize,
+    pub alphabet_size: u64,
 }
 
 impl GBWTPayload {
@@ -236,17 +242,20 @@ impl Payload for GBWTPayload {
 //-----------------------------------------------------------------------------
 
 /// Payload for the GBWT metadata header.
+///
+/// See `GBWTPayload` — `u64` fields keep the `#[repr(C)]` on-disk layout
+/// portable across 32-bit and 64-bit targets.
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct MetadataPayload {
     /// Number of samples in the GBWT.
-    pub sample_count: usize,
+    pub sample_count: u64,
 
     /// Number of haplotypes in the GBWT.
-    pub haplotype_count: usize,
+    pub haplotype_count: u64,
 
     /// Number of contigs in the graph.
-    pub contig_count: usize,
+    pub contig_count: u64,
 }
 
 impl MetadataPayload {
@@ -281,11 +290,14 @@ impl Payload for MetadataPayload {
 //-----------------------------------------------------------------------------
 
 /// Payload for the GBWTGraph header.
+///
+/// See `GBWTPayload` — `u64` fields keep the `#[repr(C)]` on-disk layout
+/// portable across 32-bit and 64-bit targets.
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct SequencesPayload {
     /// Number of nodes in the original graph.
-    pub nodes: usize,
+    pub nodes: u64,
 }
 
 impl SequencesPayload {

@@ -108,7 +108,7 @@ impl GBWT {
     /// Returns the total length of the sequences in the index.
     #[inline]
     pub fn len(&self) -> usize {
-        self.header.payload().size
+        self.header.payload().size as usize
     }
 
     /// Returns `true` if the index is empty.
@@ -120,19 +120,19 @@ impl GBWT {
     /// Returns the number of sequences in the index.
     #[inline]
     pub fn sequences(&self) -> usize {
-        self.header.payload().sequences
+        self.header.payload().sequences as usize
     }
 
     /// Returns the size of the alphabet.
     #[inline]
     pub fn alphabet_size(&self) -> usize {
-        self.header.payload().alphabet_size
+        self.header.payload().alphabet_size as usize
     }
 
     /// Returns the alphabet offset for the effective alphabet.
     #[inline]
     pub fn alphabet_offset(&self) -> usize {
-        self.header.payload().offset
+        self.header.payload().offset as usize
     }
 
     /// Returns the size of the effective alphabet.
@@ -424,7 +424,7 @@ impl Serialize for GBWT {
             return Err(Error::new(ErrorKind::InvalidData, "GBWT: Invalid metadata flag in the header"));
         }
         if let Some(meta) = metadata.as_ref() && meta.has_path_names() {
-            let expected = if header.is_set(GBWTPayload::FLAG_BIDIRECTIONAL) { header.payload().sequences / 2 } else { header.payload().sequences };
+            let expected = if header.is_set(GBWTPayload::FLAG_BIDIRECTIONAL) { (header.payload().sequences / 2) as usize } else { header.payload().sequences as usize };
             if meta.paths() > 0 && meta.paths() != expected {
                 return Err(Error::new(ErrorKind::InvalidData, "GBWT: Invalid path count in the metadata"));
             }

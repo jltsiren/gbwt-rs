@@ -15,9 +15,9 @@ const PHASES: usize = 2;
 
 fn create_metadata(paths: bool, samples: bool, contigs: bool) -> Metadata {
     let mut header = Header::<MetadataPayload>::new();
-    header.payload_mut().sample_count = SAMPLES;
-    header.payload_mut().haplotype_count = SAMPLES * PHASES;
-    header.payload_mut().contig_count = CONTIGS;
+    header.payload_mut().sample_count = SAMPLES as u64;
+    header.payload_mut().haplotype_count = (SAMPLES * PHASES) as u64;
+    header.payload_mut().contig_count = CONTIGS as u64;
 
     let mut path_names = Vec::<PathName>::new();
     if paths {
