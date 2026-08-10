@@ -770,6 +770,7 @@ fn load_chains(filename: &PathBuf) -> Vec<IntVector> {
 
 fn check_chains(chains: &Chains, data: &[IntVector]) {
     assert_eq!(chains.len(), data.len(), "Wrong number of chains");
+    assert!(chains.trivial_chains().is_none(), "Expected an unknown number of trivial chains");
     assert!(chains.components().is_none(), "Expected an unknown number of components");
     let mut expected_links = 0;
     for chain in data.iter() {
@@ -825,6 +826,7 @@ fn check_region(graph: &GBZ, chains: &Chains, from: usize, to: usize) {
 fn chains_empty() {
     let chains = Chains::new();
     assert_eq!(chains.len(), 0, "Expected empty chains");
+    assert!(chains.trivial_chains().is_none(), "Expected an unknown number of trivial chains");
     assert!(chains.components().is_none(), "Expected an unknown number of components");
     assert_eq!(chains.links(), 0, "Expected no links");
     let _ = serialize::test(&chains, "empty-chains", None, true);
@@ -872,6 +874,7 @@ fn chains_add_link() {
     }
     chains.count_chains();
     assert_eq!(chains.len(), truth.len(), "Mismatch in number of chains");
+    assert!(chains.trivial_chains().is_none(), "Expected an unknown number of trivial chains");
     assert!(chains.components().is_none(), "Expected an unknown number of components");
     assert_eq!(chains.links(), truth.links(), "Mismatch in number of links");
     assert_eq!(chains, truth, "Mismatch in chains content");

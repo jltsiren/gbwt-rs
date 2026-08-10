@@ -397,6 +397,7 @@ pub fn find_chains(graph: &GBZ) -> Chains {
     let mut chains = Chains::new();
     let components = graph.weakly_connected_components();
 
+    let mut trivial_chains = 0;
     for component in components.iter() {
         let tips = find_tips(graph, component);
         if tips.len() != 2 {
@@ -448,12 +449,16 @@ pub fn find_chains(graph: &GBZ) -> Chains {
             .filter(|handle| is_boundary_node(*handle))
             .collect();
         drop(chain_handles);
+        if boundary.len() < 2 {
+            trivial_chains += 1;
+        }
         for pair in boundary.windows(2) {
             chains.add_link(pair[0] as usize, pair[1] as usize);
         }
     }
 
     chains.count_chains();
+    chains.set_trivial_chains(Some(trivial_chains));
     chains.set_components(Some(components.len()));
     chains
 }

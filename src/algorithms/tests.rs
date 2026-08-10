@@ -286,6 +286,7 @@ fn find_chains_test() {
 
     assert_eq!(result.len(), expected.len(), "Number of chains differs");
     assert_eq!(result.components(), Some(result.len()), "Expected the number of components to match the number of chains");
+    expected.set_trivial_chains(result.trivial_chains()); // Serialized chains do not include the number of trivial chains.
     expected.set_components(result.components()); // Serialized chains do not include the number of components.
     assert_eq!(result.links(), expected.links(), "Number of links differs");
     assert!(result.iter().eq(expected.iter()), "Link iterators differ");

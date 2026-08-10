@@ -1,5 +1,9 @@
 # Releases
 
+## Current version
+
+* Chain-finding algorithm also records the number of trivial chains with no snarls.
+
 ## GBZ 0.6.1 (2026-04-17)
 
 * Command line arguments can use suffixes (e.g. `k`, `MiB`) for sizes and counts that can plausibly be large.
