@@ -321,7 +321,7 @@ fn read_names(config: &Config) -> Result<Vec<(usize, usize, usize)>, String> {
 fn read_suffix_array(expected_len: usize, config: &Config) -> Result<Vec<(usize, u64)>, String> {
     let filename = format!("{}.sa", config.output.as_ref().unwrap());
     if config.verbose {
-        eprintln!("Reading suffix array from {}", &filename);
+        eprintln!("Reading suffix array from {}", filename);
     }
     let mut file = File::open(filename).map_err(|e| e.to_string())?;
     file.seek(SeekFrom::Start((config.sa_skip * mem::size_of::<u64>()) as u64)).map_err(|e| e.to_string())?;
@@ -373,7 +373,7 @@ fn extract_path(gbz: &GBZ, path_id: usize, orientation: Orientation) -> Vec<u64>
 fn count_bwt_runs(expected_len: usize, config: &Config) -> Result<(), String> {
     let filename = format!("{}.bwt", config.output.as_ref().unwrap());
     if config.verbose {
-        eprintln!("Counting BWT runs in {}", &filename);
+        eprintln!("Counting BWT runs in {}", filename);
     }
     let mut file = File::open(filename).map_err(|e| e.to_string())?;
     file.seek(SeekFrom::Start(config.sa_skip as u64)).map_err(|e| e.to_string())?;

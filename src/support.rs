@@ -1584,17 +1584,14 @@ impl<'a> Iterator for RLEIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let mut run = Run::default();
         if self.sigma >= RLE::THRESHOLD {
-            if let Some(value) = self.source.next() { run.value = value; } else { return None; }
-            if let Some(len) = self.source.next() { run.len = len + 1; } else { return None; }
+            run.value = self.source.next()?;
+            run.len = self.source.next()? + 1;
         } else {
-            if let Some(byte) = self.source.byte() {
-                run.value = (byte as usize) % self.sigma;
-                run.len = (byte as usize) / self.sigma + 1;
-            } else {
-                return None;
-            }
+            let byte = self.source.byte()?;
+            run.value = (byte as usize) % self.sigma;
+            run.len = (byte as usize) / self.sigma + 1;
             if run.len == self.threshold {
-                if let Some(len) = self.source.next() { run.len += len; } else { return None; }
+                run.len += self.source.next()?;
             }
         }
         Some(run)

@@ -1,6 +1,6 @@
 # Releases
 
-## Current version
+## GBZ 0.6.2 (2026-08-11)
 
 * Chain-finding algorithm also records the number of trivial chains with no snarls.
 
@@ -96,7 +96,7 @@ The first pre-release includes supports the GBWT Simple-SDS file format as well 
 * Run `cargo clippy --features=binaries`.
 * Run tests with `cargo test` and `cargo test -- --ignored`.
 * Build documentation with `cargo doc`.
-* Build the optimized version with `cargo build --release --features=binaries`.
+* Build the optimized version with `cargo build --release --features binaries`.
 * Commit the final changes for the release.
 * Publish in crates.io with `cargo publish`.
 * Push to GitHub.
