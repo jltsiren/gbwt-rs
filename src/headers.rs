@@ -1,5 +1,6 @@
 //! File format headers.
 
+use std::io::{self, Error, ErrorKind};
 use std::path::Path;
 
 use simple_sds::serialize::{Serialize, Serializable};
@@ -77,6 +78,20 @@ impl<T: Payload> Header<T> {
     pub fn update(&mut self) {
         self.version = T::VERSION;
         self.payload.update()
+    }
+
+    /// Updates the header to the given version.
+    ///
+    /// The default implementation calls [`Payload::update_to_version`] and updates the version number.
+    /// If the validity of flags depends on the version, this should be overridden.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorKind::InvalidInput`] if the version is not supported.
+    pub fn update_to_version(&mut self, version: u32) -> io::Result<()> {
+        self.payload.update_to_version(version)?;
+        self.version = version;
+        Ok(())
     }
 
     /// Returns `true` if the specified binary flag is set.
@@ -175,6 +190,23 @@ pub trait Payload: Copy + Eq + Default {
     /// Updates the header to the latest version.
     fn update(&mut self);
 
+    /// Updates the header to the given version.
+    ///
+    /// The default implementation only checks that the version is supported.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorKind::InvalidInput`] if the version is not supported.
+    fn update_to_version(&mut self, version: u32) -> io::Result<()> {
+        if version < Self::MIN_VERSION || version > Self::VERSION {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("{}: Unsupported version {} (expected {} to {})", Self::NAME, version, Self::MIN_VERSION, Self::VERSION),
+            ));
+        }
+        Ok(())
+    }
+
     /// Returns the binary mask corresponding to valid flags in the specified version.
     fn mask(version: u32) -> u64;
 
@@ -210,12 +242,15 @@ impl GBWTPayload {
 
     /// The serialized data is in the simple-sds format.
     pub const FLAG_SIMPLE_SDS: u64    = 0x0004;
+
+    /// First version with Zstandard compressed BWT.
+    pub const ZSTD_VERSION: u32 = 6;
 }
 
 impl Payload for GBWTPayload {
     const NAME: &'static str = "GBWTHeader";
     const TAG: u32 = 0x6B376B37;
-    const VERSION: u32 = 5;
+    const VERSION: u32 = 6;
     const MIN_VERSION: u32 = 5;
     const DEFAULT_FLAGS: u64 = Self::FLAG_SIMPLE_SDS;
 
@@ -328,10 +363,34 @@ impl Payload for SequencesPayload {
 pub struct GBZPayload {
 }
 
+impl GBZPayload {
+    /// Returns the [`crate::GBWT`] version used in the given GBZ version.
+    ///
+    /// This uses [`usize`] version numbers for compatibility with [`simple_sds::serialize::SerializeVersion`].
+    pub fn gbwt_version(gbz_version: usize) -> usize {
+        if gbz_version < 3 {
+            (GBWTPayload::ZSTD_VERSION - 1) as usize
+        } else {
+            GBWTPayload::ZSTD_VERSION as usize
+        }
+    }
+
+    /// Returns the [`crate::sequences::Sequences`] version used in the given GBZ version.
+    ///
+    /// This uses [`usize`] version numbers for compatibility with [`simple_sds::serialize::SerializeVersion`].
+    pub fn sequences_version(gbz_version: usize) -> usize {
+        if gbz_version < 2 {
+            (SequencesPayload::ZSTD_VERSION - 1) as usize
+        } else {
+            SequencesPayload::ZSTD_VERSION as usize
+        }
+    }
+}
+
 impl Payload for GBZPayload {
     const NAME: &'static str = "GBZHeader";
     const TAG: u32 = 0x205A4247;
-    const VERSION: u32 = 2;
+    const VERSION: u32 = 3;
     const MIN_VERSION: u32 = 1;
     const DEFAULT_FLAGS: u64 = 0;
 

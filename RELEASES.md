@@ -1,5 +1,10 @@
 # Releases
 
+## Current version
+
+* Supports `GBZ` version 3 and `GBWT` version 6 with Zstandard compression for the BWT.
+* Implements `SerializeVersion` trait for serializing different versions of `GBZ`, `GBWT`, and `Sequences`.
+
 ## GBZ 0.6.2 (2026-08-11)
 
 * Chain-finding algorithm also records the number of trivial chains with no snarls.

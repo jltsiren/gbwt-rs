@@ -40,6 +40,14 @@ fn serialize() {
 }
 
 #[test]
+fn serialize_versions() {
+    let filename = support::get_test_data("example.gg");
+    let sequences: Sequences = serialize::load_from(&filename).unwrap();
+    let lossless_versions: Vec<usize> = (Sequences::MIN_VERSION..=Sequences::MAX_VERSION).collect();
+    serialize::test_versions(&sequences, "sequences", &lossless_versions);
+}
+
+#[test]
 fn no_translation() {
     let filename = support::get_test_data("example.gg");
     let sequences: Sequences = serialize::load_from(&filename).unwrap();
@@ -82,6 +90,14 @@ fn serialize_trans() {
     let filename = support::get_test_data("translation.gg");
     let sequences: Sequences = serialize::load_from(&filename).unwrap();
     serialize::test(&sequences, "sequences-translation", None, true);
+}
+
+#[test]
+fn serialize_trans_versions() {
+    let filename = support::get_test_data("translation.gg");
+    let sequences: Sequences = serialize::load_from(&filename).unwrap();
+    let lossless_versions: Vec<usize> = (Sequences::MIN_VERSION..=Sequences::MAX_VERSION).collect();
+    serialize::test_versions(&sequences, "sequences-translation", &lossless_versions);
 }
 
 #[test]

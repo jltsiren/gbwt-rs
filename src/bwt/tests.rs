@@ -1,8 +1,9 @@
 use super::*;
 
-use simple_sds::serialize;
+use simple_sds::{bits, serialize};
 
 use std::collections::HashSet;
+use std::fs::{self, OpenOptions};
 
 //-----------------------------------------------------------------------------
 
@@ -346,6 +347,37 @@ fn check_predecessor_at(bwt: &BWT) {
     }
 }
 
+fn check_compression(bwt: &BWT) {
+    let filename = serialize::temp_file_name("bwt-compression");
+
+    let mut options = OpenOptions::new();
+    let file = options.write(true).create(true).open(&filename);
+    assert!(file.is_ok(), "Failed to create a temporary file: {}", file.err().unwrap());
+    let mut file = file.unwrap();
+
+    let result = bwt.compress(&mut file, None);
+    assert!(result.is_ok(), "Failed to compress the BWT: {}", result.err().unwrap());
+
+    let metadata = fs::metadata(&filename);
+    assert!(metadata.is_ok(), "Failed to get metadata for the temporary file: {}", metadata.err().unwrap());
+    let metadata = metadata.unwrap();
+    let file_size = metadata.len() as usize;
+    let reported_size = bits::words_to_bytes(bwt.compressed_size_in_elements(None));
+    assert_eq!(reported_size, file_size, "Reported compressed size does not match the actual file size");
+
+    let mut options = OpenOptions::new();
+    let file = options.read(true).open(&filename);
+    assert!(file.is_ok(), "Failed to open the temporary file: {}", file.err().unwrap());
+    let mut file = file.unwrap();
+
+    let decompressed = BWT::decompress(&mut file);
+    assert!(decompressed.is_ok(), "Failed to decompress the BWT: {}", decompressed.err().unwrap());
+    let decompressed = decompressed.unwrap();
+    assert_eq!(&decompressed, bwt, "Decompressed BWT does not match the original");
+
+    fs::remove_file(&filename).unwrap();
+}
+
 //-----------------------------------------------------------------------------
 
 #[test]
@@ -358,6 +390,7 @@ fn empty_bwt() {
     check_follow(&bwt, &components);
     negative_offset_to(&bwt, &components);
     serialize::test(&bwt, "empty-bwt", None, true);
+    check_compression(&bwt);
 }
 
 #[test]
@@ -370,6 +403,7 @@ fn non_empty_bwt() {
     check_follow(&bwt, &components);
     negative_offset_to(&bwt, &components);
     serialize::test(&bwt, "non-empty-bwt", None, true);
+    check_compression(&bwt);
 }
 
 #[test]
@@ -388,6 +422,7 @@ fn empty_records() {
     check_follow(&bwt, &components);
     negative_offset_to(&bwt, &components);
     serialize::test(&bwt, "bwt-with-empty", None, true);
+    check_compression(&bwt);
 }
 
 #[test]
@@ -401,6 +436,7 @@ fn bidirectional_bwt() {
     negative_offset_to(&bwt, &components);
     check_predecessor_at(&bwt);
     serialize::test(&bwt, "bidirectional-bwt", None, true);
+    check_compression(&bwt);
 }
 
 //-----------------------------------------------------------------------------
