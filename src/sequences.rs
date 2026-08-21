@@ -6,11 +6,11 @@
 //!
 //! At the moment, this implementation only supports graphs built with other tools.
 
-use crate::headers::{Header, SequencesPayload};
+use crate::headers::{Header, Payload, SequencesPayload};
 use crate::support::{StringArray, StringIter};
 
 use simple_sds::ops::{BitVec, Select, PredSucc};
-use simple_sds::serialize::Serialize;
+use simple_sds::serialize::{Serialize, SerializeVersion};
 use simple_sds::sparse_vector::{SparseVector, OneIter};
 
 use std::io::{Error, ErrorKind};
@@ -283,14 +283,11 @@ impl Sequences {
 
 impl Serialize for Sequences {
     fn serialize_header<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
-        self.header.serialize(writer)
+        self.serialize_header_version(writer, Self::DEFAULT_VERSION)
     }
 
     fn serialize_body<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
-        self.sequences.compress(writer, None)?;
-        self.segments.serialize(writer)?;
-        self.mapping.serialize(writer)?;
-        Ok(())
+        self.serialize_body_version(writer, Self::DEFAULT_VERSION)
     }
 
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
@@ -342,6 +339,43 @@ impl Serialize for Sequences {
             self.sequences.compressed_size_in_elements(None) +
             self.segments.size_in_elements() +
             self.mapping.size_in_elements()
+    }
+}
+
+impl SerializeVersion for Sequences {
+    // This is currently the same as `SequencesPayload::MIN_VERSION`, but we could
+    // plausibly be able to read versions we cannot serialize.
+    const MIN_VERSION: usize = 3;
+
+    // We should always be able to serialize the latest version.
+    const MAX_VERSION: usize = SequencesPayload::VERSION as usize;
+
+    // Unlike the C++ implementation, we have no reason to default to an older
+    // version for backwards compatibility.
+    const DEFAULT_VERSION: usize = SequencesPayload::VERSION as usize;
+
+    fn serialize_header_version<T: io::Write>(&self, writer: &mut T, version: usize) -> io::Result<()> {
+        Self::ensure_supported_version(version, "Sequences")?;
+        let mut copy = self.header.clone();
+        copy.update_to_version(version as u32)?;
+        copy.serialize(writer)
+    }
+
+    fn serialize_body_version<T: io::Write>(&self, writer: &mut T, version: usize) -> io::Result<()> {
+        Self::ensure_supported_version(version, "Sequences")?;
+        if version as u32 >= SequencesPayload::ZSTD_VERSION {
+            self.sequences.compress(writer, None)?;
+        } else {
+            self.sequences.serialize(writer)?;
+        }
+        self.segments.serialize(writer)?;
+        self.mapping.serialize(writer)?;
+        Ok(())
+    }
+
+    fn determine_version<T: io::Read>(reader: &mut T) -> io::Result<usize> {
+        let header = Header::<SequencesPayload>::load(reader)?;
+        Ok(header.version() as usize)
     }
 }
 

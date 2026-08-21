@@ -390,11 +390,11 @@ impl GBWT {
 
 impl Serialize for GBWT {
     fn serialize_header<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
-        self.serialize_header_version(writer, <Self as SerializeVersion>::DEFAULT_VERSION)
+        self.serialize_header_version(writer, Self::DEFAULT_VERSION)
     }
 
     fn serialize_body<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
-        self.serialize_body_version(writer, <Self as SerializeVersion>::DEFAULT_VERSION)
+        self.serialize_body_version(writer, Self::DEFAULT_VERSION)
     }
 
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
@@ -442,7 +442,7 @@ impl Serialize for GBWT {
     fn size_in_elements(&self) -> usize {
         self.header.size_in_elements()
             + self.tags.size_in_elements()
-            + self.bwt.compressed_size_in_elements(Some(BWT::DEFAULT_COMPRESSION_LEVEL))
+            + self.bwt.compressed_size_in_elements(None)
             + self.da_samples.size_in_elements()
             + self.metadata.size_in_elements()
     }
@@ -471,7 +471,7 @@ impl SerializeVersion for GBWT {
         Self::ensure_supported_version(version, "GBWT")?;
         self.tags.serialize(writer)?;
         if version as u32 >= GBWTPayload::ZSTD_VERSION {
-            self.bwt.compress(writer, Some(BWT::DEFAULT_COMPRESSION_LEVEL))?;
+            self.bwt.compress(writer, None)?;
         } else {
             self.bwt.serialize(writer)?;
         }
