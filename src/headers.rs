@@ -363,10 +363,34 @@ impl Payload for SequencesPayload {
 pub struct GBZPayload {
 }
 
+impl GBZPayload {
+    /// Returns the [`crate::GBWT`] version used in the given GBZ version.
+    ///
+    /// This uses [`usize`] version numbers for compatibility with [`simple_sds::serialize::SerializeVersion`].
+    pub fn gbwt_version(gbz_version: usize) -> usize {
+        if gbz_version < 3 {
+            (GBWTPayload::ZSTD_VERSION - 1) as usize
+        } else {
+            GBWTPayload::ZSTD_VERSION as usize
+        }
+    }
+
+    /// Returns the [`crate::sequences::Sequences`] version used in the given GBZ version.
+    ///
+    /// This uses [`usize`] version numbers for compatibility with [`simple_sds::serialize::SerializeVersion`].
+    pub fn sequences_version(gbz_version: usize) -> usize {
+        if gbz_version < 2 {
+            (SequencesPayload::ZSTD_VERSION - 1) as usize
+        } else {
+            SequencesPayload::ZSTD_VERSION as usize
+        }
+    }
+}
+
 impl Payload for GBZPayload {
     const NAME: &'static str = "GBZHeader";
     const TAG: u32 = 0x205A4247;
-    const VERSION: u32 = 2;
+    const VERSION: u32 = 3;
     const MIN_VERSION: u32 = 1;
     const DEFAULT_FLAGS: u64 = 0;
 

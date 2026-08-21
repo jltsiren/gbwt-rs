@@ -18,14 +18,14 @@ use crate::bwt::Record;
 use crate::gbwt::SequenceIter;
 use crate::sequences::Sequences;
 use crate::sequences::SegmentIter as SequencesSegmentIter;
-use crate::headers::{Header, GBZPayload};
+use crate::headers::{Header, Payload, GBZPayload};
 use crate::support::{DisjointSets, Tags};
 use crate::support;
 
 use simple_sds::bit_vector::{BitVector, OneIter, Identity};
 use simple_sds::ops::{BitVec, Select};
 use simple_sds::raw_vector::{RawVector, AccessRaw};
-use simple_sds::serialize::Serialize;
+use simple_sds::serialize::{Serialize, SerializeVersion};
 
 use std::collections::BTreeSet;
 use std::io::{Error, ErrorKind};
@@ -686,14 +686,11 @@ impl GBZ {
 
 impl Serialize for GBZ {
     fn serialize_header<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
-        self.header.serialize(writer)
+        self.serialize_header_version(writer, self.header.version() as usize)
     }
 
     fn serialize_body<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
-        self.tags.serialize(writer)?;
-        self.index.serialize(writer)?;
-        self.sequences.serialize(writer)?;
-        Ok(())
+        self.serialize_body_version(writer, self.header.version() as usize)
     }
 
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
@@ -743,6 +740,38 @@ impl Serialize for GBZ {
 
     fn size_in_elements(&self) -> usize {
         self.header.size_in_elements() + self.tags.size_in_elements() + self.index.size_in_elements() + self.sequences.size_in_elements()
+    }
+}
+
+impl SerializeVersion for GBZ {
+    // This is currently the same as `GBZPayload::MIN_VERSION`, but we could
+    // plausibly be able to read versions we cannot serialize.
+    const MIN_VERSION: usize = 1;
+
+    // We should always be able to serialize the latest version.
+    const MAX_VERSION: usize = GBZPayload::VERSION as usize;
+
+    // Unlike the C++ implementation, we have no reason to default to an older
+    // version for backwards compatibility.
+    const DEFAULT_VERSION: usize = GBZPayload::VERSION as usize;
+
+    fn serialize_header_version<T: io::Write>(&self, writer: &mut T, version: usize) -> io::Result<()> {
+        Self::ensure_supported_version(version, "GBZ")?;
+        let mut copy = self.header.clone();
+        copy.update_to_version(version as u32)?;
+        copy.serialize(writer)
+    }
+
+    fn serialize_body_version<T: io::Write>(&self, writer: &mut T, version: usize) -> io::Result<()> {
+        self.tags.serialize(writer)?;
+        self.index.serialize_version(writer, GBZPayload::gbwt_version(version))?;
+        self.sequences.serialize_version(writer, GBZPayload::sequences_version(version))?;
+        Ok(())
+    }
+
+    fn determine_version<T: io::Read>(reader: &mut T) -> io::Result<usize> {
+        let header = Header::<GBZPayload>::load(reader)?;
+        Ok(header.version() as usize)
     }
 }
 
