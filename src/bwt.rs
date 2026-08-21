@@ -58,9 +58,12 @@ use simple_sds::sparse_vector::{SparseVector, SparseBuilder, OneIter};
 use simple_sds::ops::{BitVec, Select};
 use simple_sds::serialize::Serialize;
 
+use zstd::stream::Encoder as ZstdEncoder;
+use zstd::stream::Decoder as ZstdDecoder;
+
 use std::cmp::Ordering;
 use std::convert::TryFrom;
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Write, Read};
 use std::iter::FusedIterator;
 use std::ops::Range;
 use std::io;
@@ -158,6 +161,9 @@ pub struct BWT {
 }
 
 impl BWT {
+    /// Default Zstandard compression level.
+    pub const DEFAULT_COMPRESSION_LEVEL: i32 = 3;
+
     /// Returns the number of records in the BWT.
     #[inline]
     pub fn len(&self) -> usize {
@@ -217,6 +223,77 @@ impl BWT {
             iter: self.index.one_iter(),
             next: 0,
         }
+    }
+
+    /// Serializes the struct using Zstandard compression for the data.
+    ///
+    /// If a compression level is not provided, [`Self::DEFAULT_COMPRESSION_LEVEL`] is used.
+    /// See [`Self::serialize`] for a non-compressed serialization format.
+    ///
+    /// # Errors
+    ///
+    /// Passes through any I/O errors and compression errors.
+    pub fn compress<T: io::Write>(&self, writer: &mut T, compression_level: Option<i32>) -> io::Result<()> {
+        // The index remains the same either way.
+        self.index.serialize(writer)?;
+
+        // Compress the data into a vector of bytes using zstd and serialize it.
+        // We cannot write directly into the writer, as we need to know the compressed size in advance.
+        let compression_level = compression_level.unwrap_or(Self::DEFAULT_COMPRESSION_LEVEL);
+        let mut encoder = ZstdEncoder::new(Vec::new(), compression_level)?;
+        encoder.write_all(&self.data)?;
+        let compressed = encoder.finish()?;
+        compressed.serialize(writer)?;
+
+        Ok(())
+    }
+
+    /// Deserializes a compressed BWT from the given reader.
+    ///
+    /// Uses Zstandard compression for the data.
+    /// See [`Self::load`] for a non-compressed serialization format.
+    ///
+    /// # Errors
+    ///
+    /// Passes through any I/O errors and decompression errors.
+    /// Returns [`ErrorKind::InvalidData`] if the data is not internally consistent.
+    pub fn decompress<T: io::Read>(reader: &mut T) -> io::Result<Self> {
+        // The index remains the same either way.
+        let index = SparseVector::load(reader)?;
+
+        // Load and decompress the data.
+        let compressed: Vec<u8> = Vec::load(reader)?;
+        let mut decoder = ZstdDecoder::new(&compressed[..])?;
+        let mut data: Vec<u8> = Vec::with_capacity(index.len());
+        decoder.read_to_end(&mut data)?;
+        if index.len() != data.len() {
+            return Err(Error::new(ErrorKind::InvalidData, "BWT: Index / data length mismatch"));
+        }
+
+        Ok(BWT {
+            index, data,
+        })
+    }
+
+    /// Returns the size of the compressed struct in [`u64`] elements with the given compression level.
+    ///
+    /// If a compression level is not provided, [`Self::DEFAULT_COMPRESSION_LEVEL`] is used.
+    /// See [`Self::size_in_elements`] for the size of the non-compressed struct.
+    ///
+    /// # Panics
+    ///
+    /// May panic due to compression errors.
+    pub fn compressed_size_in_elements(&self, compression_level: Option<i32>) -> usize {
+        let mut result = 0;
+        result += self.index.size_in_elements();
+
+        let compression_level = compression_level.unwrap_or(Self::DEFAULT_COMPRESSION_LEVEL);
+        let mut encoder = ZstdEncoder::new(Vec::new(), compression_level).unwrap();
+        encoder.write_all(&self.data).unwrap();
+        let compressed = encoder.finish().unwrap();
+        result += compressed.size_in_elements();
+
+        result
     }
 }
 

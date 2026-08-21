@@ -1,5 +1,9 @@
 # Releases
 
+## Current version
+
+* Implements `SerializeVersion` trait for serializing different versions of `GBWT`.
+
 ## GBZ 0.6.2 (2026-08-11)
 
 * Chain-finding algorithm also records the number of trivial chains with no snarls.

@@ -12,11 +12,11 @@
 use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE};
 use crate::{Orientation, Pos, Metadata};
 use crate::bwt::{BWT, Record};
-use crate::headers::{Header, GBWTPayload};
+use crate::headers::{Header, Payload, GBWTPayload};
 use crate::support::Tags;
 use crate::support;
 
-use simple_sds::serialize::Serialize;
+use simple_sds::serialize::{Serialize, SerializeVersion};
 
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
@@ -390,15 +390,11 @@ impl GBWT {
 
 impl Serialize for GBWT {
     fn serialize_header<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
-        self.header.serialize(writer)
+        self.serialize_header_version(writer, <Self as SerializeVersion>::DEFAULT_VERSION)
     }
 
     fn serialize_body<T: io::Write>(&self, writer: &mut T) -> io::Result<()> {
-        self.tags.serialize(writer)?;
-        self.bwt.serialize(writer)?;
-        self.da_samples.serialize(writer)?; // Document array samples.
-        self.metadata.serialize(writer)?;
-        Ok(())
+        self.serialize_body_version(writer, <Self as SerializeVersion>::DEFAULT_VERSION)
     }
 
     fn load<T: io::Read>(reader: &mut T) -> io::Result<Self> {
@@ -410,7 +406,11 @@ impl Serialize for GBWT {
         let mut tags = Tags::load(reader)?;
         tags.insert(SOURCE_KEY, SOURCE_VALUE);
 
-        let bwt = BWT::load(reader)?;
+        let bwt = if header.version() >= GBWTPayload::ZSTD_VERSION {
+            BWT::decompress(reader)?
+        } else {
+            BWT::load(reader)?
+        };
 
         // Decompress the endmarker, as the record can be poorly compressible.
         let endmarker = if bwt.is_empty() { Vec::new() } else { bwt.record(ENDMARKER).unwrap().decompress() };
@@ -440,7 +440,49 @@ impl Serialize for GBWT {
     }
 
     fn size_in_elements(&self) -> usize {
-        self.header.size_in_elements() + self.tags.size_in_elements() + self.bwt.size_in_elements() + self.da_samples.size_in_elements() + self.metadata.size_in_elements()
+        self.header.size_in_elements()
+            + self.tags.size_in_elements()
+            + self.bwt.compressed_size_in_elements(Some(BWT::DEFAULT_COMPRESSION_LEVEL))
+            + self.da_samples.size_in_elements()
+            + self.metadata.size_in_elements()
+    }
+}
+
+impl SerializeVersion for GBWT {
+    // This is currently the same as `GBWTPayload::MIN_VERSION`, but we could
+    // plausibly be able to read versions we cannot serialize.
+    const MIN_VERSION: usize = 5;
+
+    // We should always be able to serialize the latest version.
+    const MAX_VERSION: usize = GBWTPayload::VERSION as usize;
+
+    // Unlike the C++ implementation, we have no reason to default to an older
+    // version for backwards compatibility.
+    const DEFAULT_VERSION: usize = GBWTPayload::VERSION as usize;
+
+    fn serialize_header_version<T: io::Write>(&self, writer: &mut T, version: usize) -> io::Result<()> {
+        Self::ensure_supported_version(version, "GBWT")?;
+        let mut copy = self.header.clone();
+        copy.update_to_version(version as u32)?;
+        copy.serialize(writer)
+    }
+
+    fn serialize_body_version<T: io::Write>(&self, writer: &mut T, version: usize) -> io::Result<()> {
+        Self::ensure_supported_version(version, "GBWT")?;
+        self.tags.serialize(writer)?;
+        if version as u32 >= GBWTPayload::ZSTD_VERSION {
+            self.bwt.compress(writer, Some(BWT::DEFAULT_COMPRESSION_LEVEL))?;
+        } else {
+            self.bwt.serialize(writer)?;
+        }
+        self.da_samples.serialize(writer)?;
+        self.metadata.serialize(writer)?;
+        Ok(())
+    }
+
+    fn determine_version<T: io::Read>(reader: &mut T) -> io::Result<usize> {
+        let header = Header::<GBWTPayload>::load(reader)?;
+        Ok(header.version() as usize)
     }
 }
 

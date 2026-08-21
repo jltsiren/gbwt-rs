@@ -76,10 +76,26 @@ fn serialize() {
 }
 
 #[test]
+fn serialize_versions() {
+    let filename = support::get_test_data("example.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
+    let lossless_versions: Vec<usize> = (GBWT::MIN_VERSION..=GBWT::MAX_VERSION).collect();
+    serialize::test_versions(&index, "gbwt", &lossless_versions);
+}
+
+#[test]
 fn serialize_with_empty() {
     let filename = support::get_test_data("with-empty.gbwt");
     let index: GBWT = serialize::load_from(&filename).unwrap();
     serialize::test(&index, "gbwt-with-empty", None, true);
+}
+
+#[test]
+fn serialize_versions_with_empty() {
+    let filename = support::get_test_data("with-empty.gbwt");
+    let index: GBWT = serialize::load_from(&filename).unwrap();
+    let lossless_versions: Vec<usize> = (GBWT::MIN_VERSION..=GBWT::MAX_VERSION).collect();
+    serialize::test_versions(&index, "gbwt-with-empty", &lossless_versions);
 }
 
 //-----------------------------------------------------------------------------
