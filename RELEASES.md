@@ -4,7 +4,9 @@
 
 * Supports `GBZ` version 3 and `GBWT` version 6 with Zstandard compression for the BWT.
 * Implements `SerializeVersion` trait for serializing different versions of `GBZ`, `GBWT`, and `Sequences`.
-* `GraphName` structure for representing graph names and relationships between graphs (imported from [pggname](https://github.com/jltsiren/pggname)).
+* `GraphName` structure for representing graph names and relationships between graphs.
+  * Imported from [pggname](https://github.com/jltsiren/pggname).
+  * `gbunzip` now includes graph name information in GFA headers.
 
 ## GBZ 0.6.2 (2026-08-11)
 

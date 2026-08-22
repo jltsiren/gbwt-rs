@@ -3,7 +3,7 @@
     clippy::new_without_default
 )]
 
-use gbz::{GBWT, GBZ, Orientation};
+use gbz::{GBWT, GBZ, GraphName, Orientation};
 use gbz::{GENERIC_SAMPLE, REFERENCE_SAMPLES_KEY};
 use gbz::internal;
 
@@ -192,21 +192,35 @@ fn write_gfa(gbz: &GBZ, config: &Config) -> io::Result<()> {
 
 fn write_gfa_header<T: Write>(gbz: &GBZ, output: &mut T) -> io::Result<()> {
     let index: &GBWT = gbz.as_ref();
-    let tags = index.tags();
-    let header = if let Some(sample_names) = tags.get(REFERENCE_SAMPLES_KEY) {
+    let gbwt_tags = index.tags();
+    let header = if let Some(sample_names) = gbwt_tags.get(REFERENCE_SAMPLES_KEY) {
         format!("H\tVN:Z:1.1\tRS:Z:{}\n", sample_names)
     } else {
         "H\tVN:Z:1.1\n".to_string()
     };
     output.write_all(header.as_ref())?;
+
+    let gbz_tags = gbz.tags();
+    let graph_name = GraphName::from_tags(&gbz_tags);
+    match graph_name {
+        Ok(graph_name) => {
+            let header_lines = graph_name.to_gfa_header_lines();
+            for line in header_lines {
+                output.write_all(line.as_bytes())?;
+                output.write_all(b"\n")?;
+            }
+        },
+        Err(err) => {
+            eprintln!("Warning: Could not parse graph name tags: {}", err);
+        },
+    }
+
     Ok(())
 }
 
 fn write_gfa_impl<T: Write + Send>(gbz: &GBZ, output: T, config: &Config) -> io::Result<()> {
     let mut buffer = BufWriter::with_capacity(config.buffer_size, output);
     write_gfa_header(gbz, &mut buffer)?;
-    // FIXME: We should output pggname information, but that functionality is currently
-    // in a separate crate that depends on gbz.
     write_segments(gbz, &mut buffer, config)?;
     write_links(gbz, &mut buffer, config)?;
 
@@ -348,7 +362,6 @@ fn write_paths<T: Write + Send>(gbz: &GBZ, output: &mut T, config: &Config) -> i
     let metadata = gbz.metadata().unwrap();
     let ref_sample = metadata.sample_id(GENERIC_SAMPLE);
     if ref_sample.is_none() {
-        eprintln!("No generic paths in the graph");
         return Ok(());
     }
     let ref_sample = ref_sample.unwrap();
