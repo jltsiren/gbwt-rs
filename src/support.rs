@@ -1074,7 +1074,7 @@ impl AsRef<StringArray> for Dictionary {
 /// # Examples
 ///
 /// ```
-/// use gbz::support::Tags;
+/// use gbz::Tags;
 ///
 /// let mut tags = Tags::new();
 /// tags.insert("first-key", "first-value");

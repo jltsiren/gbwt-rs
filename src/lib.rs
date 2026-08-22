@@ -46,6 +46,7 @@ pub mod gbz;
 pub mod sequences;
 pub mod headers;
 pub mod metadata;
+pub mod name;
 pub mod support;
 
 // Shared internal code for the binaries.
@@ -61,7 +62,8 @@ pub use crate::gbwt::builder::{GBWTBuilder, MutableGBWT};
 pub use crate::gbz::GBZ;
 pub use crate::sequences::Segment;
 pub use crate::metadata::{Metadata, MetadataBuilder, PathName, FullPathName};
-pub use crate::support::{GraphPosition, Orientation, NodeSide};
+pub use crate::name::GraphName;
+pub use crate::support::{GraphPosition, Orientation, NodeSide, Tags};
 
 //-----------------------------------------------------------------------------
 

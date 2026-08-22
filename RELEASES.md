@@ -4,6 +4,7 @@
 
 * Supports `GBZ` version 3 and `GBWT` version 6 with Zstandard compression for the BWT.
 * Implements `SerializeVersion` trait for serializing different versions of `GBZ`, `GBWT`, and `Sequences`.
+* `GraphName` structure for representing graph names and relationships between graphs (imported from [pggname](https://github.com/jltsiren/pggname)).
 
 ## GBZ 0.6.2 (2026-08-11)
 
@@ -98,7 +99,7 @@ The first pre-release includes supports the GBWT Simple-SDS file format as well 
 * Update version in `Cargo.toml`.
 * Switch to crates.io versions of dependencies, if necessary.
 * Update `RELEASES.md`.
-* Run `cargo clippy --features=binaries`.
+* Run `cargo clippy --features binaries`.
 * Run tests with `cargo test` and `cargo test -- --ignored`.
 * Build documentation with `cargo doc`.
 * Build the optimized version with `cargo build --release --features binaries`.
