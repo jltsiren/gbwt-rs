@@ -1,6 +1,6 @@
 # Releases
 
-## Current version
+## GBZ 0.7.0 (2026-08-24)
 
 * Supports `GBZ` version 3 and `GBWT` version 6 with Zstandard compression for the BWT.
 * Implements `SerializeVersion` trait for serializing different versions of `GBZ`, `GBWT`, and `Sequences`.

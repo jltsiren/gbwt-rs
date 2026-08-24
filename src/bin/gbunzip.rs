@@ -201,7 +201,7 @@ fn write_gfa_header<T: Write>(gbz: &GBZ, output: &mut T) -> io::Result<()> {
     output.write_all(header.as_ref())?;
 
     let gbz_tags = gbz.tags();
-    let graph_name = GraphName::from_tags(&gbz_tags);
+    let graph_name = GraphName::from_tags(gbz_tags);
     match graph_name {
         Ok(graph_name) => {
             let header_lines = graph_name.to_gfa_header_lines();

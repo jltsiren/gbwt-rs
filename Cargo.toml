@@ -1,6 +1,6 @@
 [package]
 name = "gbz"
-version = "0.6.2"
+version = "0.7.0"
 edition = "2024"
 description = "GBZ file format for pangenome graphs"
 license = "MIT"
@@ -11,8 +11,8 @@ repository = "https://github.com/jltsiren/gbwt-rs"
 binaries = ["getopts", "libc", "rand", "rayon"]
 
 [dependencies]
-#simple-sds = { version = "0.4.1" }
-simple-sds = { git = "https://github.com/jltsiren/simple-sds.git", branch = "main" }
+simple-sds = { version = "0.4.2" }
+#simple-sds = { git = "https://github.com/jltsiren/simple-sds.git", branch = "main" }
 zstd = { version = "0.13" }
 getopts = { version = "0.2", optional = true }
 libc = { version = "0.2", optional = true }

@@ -757,7 +757,7 @@ impl SerializeVersion for GBZ {
 
     fn serialize_header_version<T: io::Write>(&self, writer: &mut T, version: usize) -> io::Result<()> {
         Self::ensure_supported_version(version, "GBZ")?;
-        let mut copy = self.header.clone();
+        let mut copy = self.header;
         copy.update_to_version(version as u32)?;
         copy.serialize(writer)
     }
