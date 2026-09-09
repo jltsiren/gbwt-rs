@@ -328,7 +328,7 @@ impl From<BWTBuilder> for BWT {
     fn from(source: BWTBuilder) -> Self {
         let mut builder = SparseBuilder::new(source.encoder.len(), source.offsets.len()).unwrap();
         for offset in source.offsets.iter() {
-            unsafe { builder.set_unchecked(*offset); }
+            builder.set(*offset);
         }
         BWT {
             index: SparseVector::try_from(builder).unwrap(),
