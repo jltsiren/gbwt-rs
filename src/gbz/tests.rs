@@ -1,6 +1,8 @@
 use super::*;
 
-use crate::support;
+use crate::gbwt::GBWT;
+use crate::sequences::Sequences;
+use crate::support::{self, Tags};
 
 use simple_sds::serialize;
 
@@ -629,6 +631,36 @@ fn gbz_versions() {
             assert!(versioned_path.eq(reference_path), "Invalid path {} in versioned graph loaded from file {}", path_id, versioned_file.to_string_lossy());
         }
     }
+}
+
+//-----------------------------------------------------------------------------
+
+#[test]
+fn from_parts() {
+    let gbwt: GBWT = serialize::load_from(&support::get_test_data("translation.gbwt")).unwrap();
+    let sequences: Sequences = serialize::load_from(&support::get_test_data("translation.gg")).unwrap();
+    let gbz = GBZ::from_parts(gbwt, sequences, Tags::new()).unwrap();
+
+    let truth: GBZ = serialize::load_from(&support::get_test_data("translation.gbz")).unwrap();
+
+    // The tags differ (the reference was written by the C++ implementation),
+    // but the index, sequences, and real nodes must match.
+    assert_eq!(gbz.index, truth.index, "GBWT index does not match the reference");
+    assert_eq!(gbz.sequences, truth.sequences, "Sequences do not match the reference");
+    assert_eq!(gbz.real_nodes, truth.real_nodes, "Real nodes do not match the reference");
+    assert_eq!(gbz.nodes(), truth.nodes(), "Invalid number of nodes");
+    assert_eq!(gbz.paths(), truth.paths(), "Invalid number of paths");
+
+    // The built GBZ must survive a serialization round trip.
+    serialize::test(&gbz, "gbz-from-parts", None, true);
+}
+
+#[test]
+fn from_parts_mismatch() {
+    // Sequences from a different graph.
+    let gbwt: GBWT = serialize::load_from(&support::get_test_data("translation.gbwt")).unwrap();
+    let sequences: Sequences = serialize::load_from(&support::get_test_data("example.gg")).unwrap();
+    assert!(GBZ::from_parts(gbwt, sequences, Tags::new()).is_err(), "Built a GBZ from mismatching parts");
 }
 
 //-----------------------------------------------------------------------------

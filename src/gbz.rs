@@ -16,7 +16,7 @@ use crate::{ENDMARKER, SOURCE_KEY, SOURCE_VALUE, GENERIC_SAMPLE, REFERENCE_SAMPL
 use crate::{Segment, GBWT, BidirectionalState, Orientation, Pos, Metadata};
 use crate::bwt::Record;
 use crate::gbwt::SequenceIter;
-use crate::sequences::Sequences;
+use crate::sequences::{self, Sequences};
 use crate::sequences::SegmentIter as SequencesSegmentIter;
 use crate::headers::{Header, Payload, GBZPayload};
 use crate::support::{DisjointSets, Tags};
@@ -131,6 +131,58 @@ pub struct GBZ {
 }
 
 //-----------------------------------------------------------------------------
+
+/// Construction.
+impl GBZ {
+    /// Builds a [`GBZ`] structure from its parts.
+    ///
+    /// The GBWT index must be bidirectional. The number of sequences and nodes
+    /// in the [`Sequences`] structure must match the GBWT, and if the sequences
+    /// contain a node-to-segment translation, the first node of the GBWT must
+    /// be node `1`.
+    ///
+    /// # Arguments
+    ///
+    /// * `index`: A bidirectional GBWT index over the graph.
+    /// * `sequences`: The node sequences and optional node-to-segment translation.
+    /// * `tags`: The GBZ tags. The [`crate::SOURCE_KEY`] tag is added or overwritten.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GBWT is not bidirectional, or if the
+    /// [`Sequences`] structure is inconsistent with the GBWT.
+    pub fn from_parts(index: GBWT, sequences: Sequences, tags: Tags) -> Result<GBZ, String> {
+        if !index.is_bidirectional() {
+            return Err(String::from("GBZ: The GBWT index is not bidirectional"));
+        }
+        let potential_nodes = index.alphabet_size().saturating_sub(index.first_node()) / 2;
+        if sequences.sequences() != potential_nodes {
+            return Err(String::from("GBZ: Mismatch between GBWT alphabet size and Sequences sequence count"));
+        }
+        if sequences.has_translation() && !index.is_empty() && support::node_id(index.first_node()) != 1 {
+            return Err(String::from("GBZ: A node-to-segment translation requires the first GBWT node to be node 1"));
+        }
+
+        let real_nodes = sequences::present_nodes(&index);
+        if sequences.nodes() != real_nodes.count_ones() {
+            return Err(String::from("GBZ: Mismatch between GBWT nodes and Sequences node count"));
+        }
+
+        let mut tags = tags;
+        tags.insert(SOURCE_KEY, SOURCE_VALUE);
+
+        let mut header = Header::<GBZPayload>::default();
+        header.update();
+
+        Ok(GBZ {
+            header,
+            tags,
+            index,
+            sequences,
+            real_nodes,
+        })
+    }
+}
 
 /// Utilities.
 impl GBZ {
@@ -714,16 +766,7 @@ impl Serialize for GBZ {
         }
 
         // Cache real nodes.
-        let mut real_nodes = RawVector::with_len(potential_nodes, false);
-        for record_id in index.as_ref().id_iter() {
-            if record_id == ENDMARKER {
-                continue;
-            }
-            let gbwt_node = index.record_to_node(record_id);
-            if support::node_orientation(gbwt_node) == Orientation::Forward {
-                real_nodes.set_bit(Self::gbwt_node_to_sequence(&index, gbwt_node), true);
-            }
-        }
+        let real_nodes = sequences::present_nodes(&index);
 
         // Update the header to the latest version after we have used the
         // serialized version for loading the correct data.
@@ -734,7 +777,7 @@ impl Serialize for GBZ {
             tags,
             index,
             sequences,
-            real_nodes: BitVector::from(real_nodes),
+            real_nodes,
         })
     }
 
