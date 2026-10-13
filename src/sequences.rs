@@ -4,14 +4,19 @@
 //! This enables representing bidirected sequence graphs compatible with a subset of the [GFA format](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md).
 //! Unlike in the [C++ implementation](https://github.com/jltsiren/gbwtgraph), the actual graph interface is provided by the [`crate::GBZ`] structure.
 //!
-//! At the moment, this implementation only supports graphs built with other tools.
+//! A [`Sequences`] structure can be built from the parts of a graph with
+//! [`Sequences::from_graph`].
 
+use crate::{ENDMARKER, GBWT, Orientation};
+use crate::graph_builder::GraphBuilder;
 use crate::headers::{Header, Payload, SequencesPayload};
-use crate::support::{StringArray, StringIter};
+use crate::support::{self, StringArray, StringIter};
 
+use simple_sds::bit_vector::BitVector;
 use simple_sds::ops::{BitVec, Select, PredSucc};
+use simple_sds::raw_vector::{RawVector, AccessRaw};
 use simple_sds::serialize::{Serialize, SerializeVersion};
-use simple_sds::sparse_vector::{SparseVector, OneIter};
+use simple_sds::sparse_vector::{SparseVector, SparseBuilder, OneIter};
 
 use std::io::{Error, ErrorKind};
 use std::iter::FusedIterator;
@@ -277,6 +282,134 @@ impl Sequences {
             limit,
         }
     }
+}
+
+//-----------------------------------------------------------------------------
+
+/// Construction.
+impl Sequences {
+    /// Builds a [`Sequences`] structure from a [`GraphBuilder`] and a
+    /// bidirectional [`GBWT`] index over the same graph.
+    ///
+    /// The node sequences are stored for every potential original node in the
+    /// interval determined by the GBWT alphabet. Nodes that are not visited by
+    /// any path in the GBWT (and hence have an empty record) get an empty
+    /// sequence. Nodes of the graph outside the interval are not stored.
+    ///
+    /// If the graph contains a node-to-segment translation, segments whose
+    /// first node is not present in the GBWT get an empty name. Segments after
+    /// the last node of the GBWT alphabet are not stored. As the serialized
+    /// format assumes that node identifiers start from `1` when a translation
+    /// is in use, the first node of the GBWT must be node `1` in that case.
+    ///
+    /// # Arguments
+    ///
+    /// * `gbwt`: A bidirectional GBWT index over the graph.
+    /// * `graph`: The graph used for building the GBWT.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GBWT is not bidirectional, if a node visited by
+    /// the GBWT is missing from the graph, or if the graph uses a translation
+    /// and the first node of the GBWT is not node `1`.
+    /// An empty GBWT produces an empty [`Sequences`] structure.
+    pub fn from_graph(gbwt: &GBWT, graph: &GraphBuilder) -> Result<Sequences, String> {
+        if !gbwt.is_bidirectional() {
+            return Err(String::from("Sequences: The GBWT index must be bidirectional"));
+        }
+        if gbwt.is_empty() {
+            // Like in the C++ implementation, an empty GBWT gives an empty graph.
+            let mapping = SparseVector::try_from(SparseBuilder::new(0, 0).map_err(|e| format!("Sequences: {}", e))?)
+                .map_err(|e| format!("Sequences: {}", e))?;
+            return Ok(Sequences {
+                header: Header::<SequencesPayload>::default(),
+                sequences: StringArray::from_bytes(&[]),
+                segments: StringArray::from_bytes(&[]),
+                mapping,
+            });
+        }
+
+        let min_node = support::node_id(gbwt.first_node());
+        let max_node = support::node_id(gbwt.alphabet_size()) - 1;
+        if graph.uses_translation() && min_node != 1 {
+            return Err(String::from("Sequences: A graph with a translation must start from node 1 in the GBWT"));
+        }
+
+        // Collect the sequences of the present nodes without copying them.
+        let present = present_nodes(gbwt);
+        let mut header = Header::<SequencesPayload>::default();
+        let mut node_sequences: Vec<&[u8]> = Vec::with_capacity(present.len());
+        let mut nodes = 0;
+        for sequence_id in 0..present.len() {
+            if present.get(sequence_id) {
+                let node_id = min_node + sequence_id;
+                if !graph.has_node(node_id) {
+                    return Err(format!("Sequences: Node {} is used in the GBWT but missing from the graph", node_id));
+                }
+                node_sequences.push(graph.node_sequence(node_id));
+                nodes += 1;
+            } else {
+                node_sequences.push(&[]);
+            }
+        }
+        header.payload_mut().nodes = nodes;
+
+        // Build the node-to-segment translation.
+        let mut segments: Vec<&[u8]> = Vec::new();
+        let mut first_nodes: Vec<usize> = Vec::new();
+        if graph.uses_translation() {
+            header.set(SequencesPayload::FLAG_TRANSLATION);
+            for (name, range) in graph.segment_iter() {
+                // Segments are listed in ascending node id order, so we can stop
+                // when we reach a segment outside the GBWT node id space.
+                if range.start > max_node {
+                    break;
+                }
+                first_nodes.push(range.start);
+                if present.get(range.start - min_node) {
+                    segments.push(name.as_bytes());
+                } else {
+                    segments.push(&[]);
+                }
+            }
+        }
+
+        // With a translation, `min_node == 1`, so the universe is `sequences + 1`.
+        let universe = if graph.uses_translation() { max_node + 1 } else { 0 };
+        let mut mapping_builder = SparseBuilder::new(universe, first_nodes.len())
+            .map_err(|e| format!("Sequences: {}", e))?;
+        for first in first_nodes {
+            mapping_builder.set(first);
+        }
+        let mapping = SparseVector::try_from(mapping_builder)
+            .map_err(|e| format!("Sequences: {}", e))?;
+
+        Ok(Sequences {
+            header,
+            sequences: StringArray::from_bytes(&node_sequences),
+            segments: StringArray::from_bytes(&segments),
+            mapping,
+        })
+    }
+}
+
+// Returns a bitvector marking the original nodes visited by the GBWT.
+//
+// The bit at offset `i` corresponds to node `i + min_node`, where `min_node` is the
+// first original node in the GBWT alphabet. The bitvector is empty if the GBWT is empty.
+pub(crate) fn present_nodes(gbwt: &GBWT) -> BitVector {
+    let potential_nodes = gbwt.alphabet_size().saturating_sub(gbwt.first_node()) / 2;
+    let mut present = RawVector::with_len(potential_nodes, false);
+    for record_id in gbwt.as_ref().id_iter() {
+        if record_id == ENDMARKER {
+            continue;
+        }
+        let gbwt_node = gbwt.record_to_node(record_id);
+        if support::node_orientation(gbwt_node) == Orientation::Forward {
+            present.set_bit((gbwt_node - gbwt.first_node()) / 2, true);
+        }
+    }
+    BitVector::from(present)
 }
 
 //-----------------------------------------------------------------------------

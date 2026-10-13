@@ -648,6 +648,12 @@ impl StringArray {
         self.index.push(self.strings.len() as u64);
     }
 
+    // Appends a new byte string to the array, assuming that there is space for it.
+    fn append_bytes(&mut self, bytes: &[u8]) {
+        self.strings.extend_from_slice(bytes);
+        self.index.push(self.strings.len() as u64);
+    }
+
     // Returns (bytes to packed, packed to bytes, packed character width).
     fn alphabet(data: &[u8]) -> (Vec<usize>, Vec<u8>, usize) {
         // Determine the byte values that are present.
@@ -838,6 +844,21 @@ impl<T: AsRef<str>> From<&[T]> for StringArray {
 impl<T: AsRef<str>> From<Vec<T>> for StringArray {
     fn from(v: Vec<T>) -> Self {
         StringArray::from(v.as_slice())
+    }
+}
+
+impl StringArray {
+    /// Builds a string array from a slice of byte strings.
+    ///
+    /// Unlike the [`From`] implementations for [`StringArray`], this does not
+    /// require the strings to be valid UTF-8.
+    pub fn from_bytes(v: &[&[u8]]) -> StringArray {
+        let total_len = v.iter().fold(0, |sum, item| sum + item.len());
+        let mut result = StringArray::with_capacity(v.len(), total_len);
+        for bytes in v.iter() {
+            result.append_bytes(bytes);
+        }
+        result
     }
 }
 
