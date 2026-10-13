@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::{GraphBuilder, GBWTBuilder};
 use crate::gbwt::GBWT;
 use crate::sequences::Sequences;
 use crate::support::{self, Tags};
@@ -661,6 +662,41 @@ fn from_parts_mismatch() {
     let gbwt: GBWT = serialize::load_from(&support::get_test_data("translation.gbwt")).unwrap();
     let sequences: Sequences = serialize::load_from(&support::get_test_data("example.gg")).unwrap();
     assert!(GBZ::from_parts(gbwt, sequences, Tags::new()).is_err(), "Built a GBZ from mismatching parts");
+}
+
+#[test]
+fn build_from_parts() {
+    // Graph with nodes 1..4 (no translation).
+    let mut graph = GraphBuilder::new();
+    graph.add_node(1, b"G").unwrap();
+    graph.add_node(2, b"A").unwrap();
+    graph.add_node(3, b"T").unwrap();
+    graph.add_node(4, b"C").unwrap();
+
+    // Two paths: 1-2-3 and 1-4, expanded to GBWT node identifiers.
+    let mut builder = GBWTBuilder::new(true, false, 100);
+    let mut path = Vec::new();
+    graph.expand_path(&[("1", Orientation::Forward), ("2", Orientation::Forward), ("3", Orientation::Forward)], &mut path).unwrap();
+    builder.insert(&path, None).unwrap();
+    let mut path = Vec::new();
+    graph.expand_path(&[("1", Orientation::Forward), ("4", Orientation::Forward)], &mut path).unwrap();
+    builder.insert(&path, None).unwrap();
+    let gbwt = builder.build().unwrap();
+
+    let sequences = Sequences::from_graph(&gbwt, &graph).unwrap();
+    let gbz = GBZ::from_parts(gbwt, sequences, Tags::new()).unwrap();
+
+    assert_eq!(gbz.nodes(), 4, "Invalid number of nodes");
+    assert_eq!(gbz.paths(), 2, "Invalid number of paths");
+    assert!(gbz.has_node(1) && gbz.has_node(2) && gbz.has_node(3) && gbz.has_node(4), "Missing nodes");
+    assert_eq!(gbz.sequence(1), Some("G".as_bytes()), "Invalid sequence for node 1");
+    assert_eq!(gbz.sequence(4), Some("C".as_bytes()), "Invalid sequence for node 4");
+
+    let path: Vec<(usize, Orientation)> = gbz.path(0, Orientation::Forward).unwrap().collect();
+    assert_eq!(path, vec![(1, Orientation::Forward), (2, Orientation::Forward), (3, Orientation::Forward)], "Invalid path 0");
+
+    // The built GBZ must survive a serialization round trip.
+    serialize::test(&gbz, "built-gbz", None, true);
 }
 
 //-----------------------------------------------------------------------------
