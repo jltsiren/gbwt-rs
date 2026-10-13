@@ -22,6 +22,7 @@ It is based on the [Simple-SDS](https://github.com/jltsiren/simple-sds) library.
 - [x] Iteration over segments and links
 - [x] Iteration over paths and path extensions
 - [x] GFA extraction
+- [x] Construction from a `GraphBuilder` and a `GBWT`
 
 ### Possible future extensions
 

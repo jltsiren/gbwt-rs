@@ -1,5 +1,5 @@
 //! A helper structure for assembling the sequences and node-to-segment
-//! translation needed for building a [`crate::Sequences`] structure.
+//! translation needed for building a [`crate::sequences::Sequences`] structure.
 //!
 //! The [`GraphBuilder`] plays the same role as the `NaiveGraph` structure in the
 //! C++ [gbwtgraph](https://github.com/jltsiren/gbwtgraph) implementation.
@@ -55,7 +55,7 @@ use std::ops::Range;
 //-----------------------------------------------------------------------------
 
 /// A helper structure for assembling node sequences and node-to-segment
-/// translation for [`crate::Sequences`] construction.
+/// translation for [`crate::sequences::Sequences`] construction.
 ///
 /// See the module documentation for further details.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
