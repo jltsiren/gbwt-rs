@@ -1,7 +1,8 @@
 use super::*;
 
-use crate::{GraphBuilder, GBWTBuilder};
+use crate::{FullPathName, GraphBuilder, GBWTBuilder};
 use crate::gbwt::GBWT;
+use crate::gbwt::builder::compare_gbwts;
 use crate::sequences::Sequences;
 use crate::support::{self, Tags};
 
@@ -697,6 +698,45 @@ fn build_from_parts() {
 
     // The built GBZ must survive a serialization round trip.
     serialize::test(&gbz, "built-gbz", None, true);
+}
+
+// Builds the graph and the GBWT index of translation.gfa, with segments chopped to at most 2 bp.
+fn build_translation_parts() -> (GraphBuilder, GBWT) {
+    let mut graph = GraphBuilder::new();
+    graph.translate_segment("s11", b"GAT", 2).unwrap();
+    graph.translate_segment("s12", b"T", 2).unwrap();
+    graph.translate_segment("s13", b"A", 2).unwrap();
+    graph.translate_segment("s14", b"CAG", 2).unwrap();
+    graph.translate_segment("unused", b"GAA", 2).unwrap();
+    graph.translate_segment("s15", b"A", 2).unwrap();
+    graph.translate_segment("s16", b"T", 2).unwrap();
+    graph.translate_segment("s17", b"TA", 2).unwrap();
+
+    // Paths in the same order as gfa2gbwt: P-line first, then W-lines.
+    let paths: Vec<(Vec<(&str, Orientation)>, FullPathName)> = vec![
+        (vec![("s11", Orientation::Forward), ("s12", Orientation::Forward), ("s14", Orientation::Forward), ("s15", Orientation::Forward), ("s17", Orientation::Forward)], FullPathName::generic("A")),
+        (vec![("s11", Orientation::Forward), ("s12", Orientation::Forward), ("s14", Orientation::Forward), ("s15", Orientation::Forward), ("s17", Orientation::Forward)], FullPathName::haplotype("sample", "A", 1, 0)),
+        (vec![("s11", Orientation::Forward), ("s13", Orientation::Forward), ("s14", Orientation::Forward), ("s16", Orientation::Forward), ("s17", Orientation::Forward)], FullPathName::haplotype("sample", "A", 2, 0)),
+    ];
+
+    let mut builder = GBWTBuilder::new(true, true, 1000);
+    let mut path = Vec::new();
+    for (steps, name) in &paths {
+        path.clear();
+        graph.expand_path(steps, &mut path).unwrap();
+        builder.insert(&path, Some(name.clone())).unwrap();
+    }
+    let gbwt = builder.build().unwrap();
+
+    (graph, gbwt)
+}
+
+#[test]
+fn build_gbwt_from_graph() {
+    let (_, gbwt) = build_translation_parts();
+
+    let truth: GBWT = serialize::load_from(&support::get_test_data("translation.gbwt")).unwrap();
+    compare_gbwts(&gbwt, &truth, "build_gbwt_from_graph").unwrap();
 }
 
 //-----------------------------------------------------------------------------
