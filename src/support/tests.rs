@@ -51,6 +51,12 @@ fn reverse_sequences() {
         let truth = b"ACGTacgt";
         check_reverse_complement(sequence, truth, "sequence with mixed case");
     }
+
+    {
+        let sequence = b"ACXgt";
+        let truth = b"acXGT";
+        check_reverse_complement(sequence, truth, "sequence with invalid characters");
+    }
 }
 
 #[test]
