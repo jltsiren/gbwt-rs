@@ -124,10 +124,10 @@ impl GraphPosition {
 
 const fn generate_complement_table() -> [u8; 256] {
     let mut result: [u8; 256] = [b'N'; 256];
-    result[b'A' as usize] = b'T'; result[b'a' as usize] = b'T';
-    result[b'C' as usize] = b'G'; result[b'c' as usize] = b'G';
-    result[b'G' as usize] = b'C'; result[b'g' as usize] = b'C';
-    result[b'T' as usize] = b'A'; result[b't' as usize] = b'A';
+    result[b'A' as usize] = b'T'; result[b'a' as usize] = b't';
+    result[b'C' as usize] = b'G'; result[b'c' as usize] = b'g';
+    result[b'G' as usize] = b'C'; result[b'g' as usize] = b'c';
+    result[b'T' as usize] = b'A'; result[b't' as usize] = b'a';
     result
 }
 

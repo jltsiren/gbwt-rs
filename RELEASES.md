@@ -1,5 +1,9 @@
 # Releases
 
+## Current version
+
+* `reverse_complement()` now preserves case.
+
 ## GBZ 0.7.0 (2026-08-24)
 
 * Supports `GBZ` version 3 and `GBWT` version 6 with Zstandard compression for the BWT.

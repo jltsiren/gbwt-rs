@@ -13,34 +13,43 @@ use std::fs::{self, File, OpenOptions};
 
 //-----------------------------------------------------------------------------
 
+fn check_reverse_complement(sequence: &[u8], expected: &[u8], test_case: &str) {
+    let rc = reverse_complement(sequence);
+    assert_eq!(&rc, expected, "Invalid reverse complement for {}", test_case);
+    let round_trip = reverse_complement(&rc);
+    assert_eq!(&round_trip, sequence, "Round-trip reverse complement failed for {}", test_case);
+}
+
 #[test]
 fn reverse_sequences() {
     {
         let sequence = b"";
         let truth = b"";
-        let rc = reverse_complement(sequence);
-        assert_eq!(&rc, truth, "Invalid reverse complement for an empty sequence");
+        check_reverse_complement(sequence, truth, "empty sequence");
     }
 
     {
         let sequence = b"C";
         let truth = b"G";
-        let rc = reverse_complement(sequence);
-        assert_eq!(&rc, truth, "Invalid reverse complement for a sequence of length 1");
+        check_reverse_complement(sequence, truth, "sequence of length 1");
     }
 
     {
         let sequence = b"GATTACA";
         let truth = b"TGTAATC";
-        let rc = reverse_complement(sequence);
-        assert_eq!(&rc, truth, "Invalid reverse complement for a sequence with odd length");
+        check_reverse_complement(sequence, truth, "sequence with odd length");
     }
 
     {
         let sequence = b"GATTACAT";
         let truth = b"ATGTAATC";
-        let rc = reverse_complement(sequence);
-        assert_eq!(&rc, truth, "Invalid reverse complement for a sequence with even length");
+        check_reverse_complement(sequence, truth, "sequence with even length");
+    }
+
+    {
+        let sequence = b"acgtACGT";
+        let truth = b"ACGTacgt";
+        check_reverse_complement(sequence, truth, "sequence with mixed case");
     }
 }
 
