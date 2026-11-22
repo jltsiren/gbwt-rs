@@ -1,6 +1,6 @@
 # Releases
 
-## Current version
+## GBZ 0.7.1 (2026-11-21)
 
 * `reverse_complement()` now preserves case.
 
